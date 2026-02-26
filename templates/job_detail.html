@@ -1,0 +1,406 @@
+{% extends "base.html" %}
+
+{% block title %}{{ job.title }} - Job Search Platform{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <a href="{{ url_for('index') }}" class="text-blue-400 hover:text-blue-300">
+        ← Back to Jobs
+    </a>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- Main Content -->
+    <div class="lg:col-span-2 space-y-6">
+        <!-- Job Header -->
+        <div class="card">
+            <div class="flex items-start justify-between mb-4">
+                <div class="flex-1">
+                    <h1 class="text-3xl font-bold text-gray-100 mb-2">
+                        {{ job.title }}
+                    </h1>
+                    <div class="text-lg text-gray-300 mb-3">
+                        {{ job.company or 'Unknown Company' }}
+                    </div>
+                    <div class="flex flex-wrap gap-3 text-sm text-gray-400">
+                        {% if job.location %}
+                        <span>📍 {{ job.location }}</span>
+                        {% endif %}
+                        {% if job.salary_min and job.salary_max %}
+                        <span>💰 ${{ "{:,}".format(job.salary_min) }} - ${{ "{:,}".format(job.salary_max) }}</span>
+                        {% endif %}
+                        {% if job.posted_date %}
+                        <span>📅 Posted {{ job.posted_date.strftime('%m/%d/%Y') }}</span>
+                        {% endif %}
+                        <span class="px-2 py-1 bg-gray-700 rounded">🔗 {{ job.source }}</span>
+                    </div>
+                </div>
+                
+                <div class="ml-4">
+                    <div class="inline-flex items-center px-4 py-2 rounded-full text-lg font-bold
+                                {% if job.match_score >= 80 %}bg-green-900 text-green-300 border border-green-700
+                                {% elif job.match_score >= 60 %}bg-yellow-900 text-yellow-300 border border-yellow-700
+                                {% else %}bg-red-900 text-red-300 border border-red-700{% endif %}">
+                        {{ job.match_score or '?' }}%
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="flex flex-wrap gap-3 pt-4 border-t border-gray-700">
+                <a href="{{ job.url }}" target="_blank" class="btn-primary">
+                    Apply on {{ job.source.title() }}
+                </a>
+                <button onclick="generateCoverLetter()" class="btn-secondary">
+                    Generate Cover Letter
+                </button>
+                {% if not application or application.status == 'not_applied' %}
+                <button onclick="markAsApplied()" class="btn-primary">
+                    Mark as Applied
+                </button>
+                {% endif %}
+                <button onclick="scheduleInterview()" class="btn-secondary">
+                    Schedule Interview
+                </button>
+                <button onclick="markNotInterested()" class="btn-secondary">
+                    Not Interested
+                </button>
+            </div>
+        </div>
+        
+        <!-- Job Description -->
+        <div class="card">
+            <h2 class="text-xl font-semibold text-gray-100 mb-4">📋 Description</h2>
+            {% if job.description %}
+            <div class="prose prose-invert max-w-none text-gray-300">
+                {{ job.description|safe }}
+            </div>
+            {% else %}
+            <p class="text-gray-500 italic">No description available</p>
+            {% endif %}
+        </div>
+        
+        <!-- Requirements -->
+        {% if job.requirements %}
+        <div class="card">
+            <h2 class="text-xl font-semibold text-gray-100 mb-4">✅ Requirements</h2>
+            <div class="prose prose-invert max-w-none text-gray-300">
+                {{ job.requirements|safe }}
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- AI Match Explanation -->
+        {% if job.match_explanation %}
+        <div class="card bg-gradient-to-r from-blue-900 to-blue-800 border-2 border-blue-600">
+            <div class="flex items-start gap-3">
+                <div class="flex-shrink-0 w-10 h-10 bg-blue-700 rounded-full flex items-center justify-center text-2xl">
+                    🎯
+                </div>
+                <div class="flex-1">
+                    <h2 class="text-xl font-bold text-blue-100 mb-3">Why This Matches</h2>
+                    <p class="text-blue-50 leading-relaxed">
+                        {{ job.match_explanation }}
+                    </p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Company Research Chat -->
+        <div class="card" x-data="{ messages: [], input: '', loading: false }">
+            <h2 class="text-xl font-semibold text-gray-100 mb-4">💬 Ask AI About This Job</h2>
+            
+            <!-- Chat Messages -->
+            <div class="space-y-3 mb-4 max-h-96 overflow-y-auto" x-show="messages.length > 0">
+                <template x-for="(msg, index) in messages" :key="index">
+                    <div :class="msg.role === 'user' ? 'text-right' : 'text-left'">
+                        <div :class="msg.role === 'user' 
+                                      ? 'inline-block bg-blue-600 text-white px-4 py-2 rounded-lg' 
+                                      : 'inline-block bg-gray-700 text-gray-100 px-4 py-2 rounded-lg max-w-lg text-left'">
+                            <p x-text="msg.content" class="whitespace-pre-wrap"></p>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            
+            <!-- Input -->
+            <div class="flex gap-2">
+                <input type="text" x-model="input" 
+                       @keyup.enter="sendMessage()"
+                       placeholder="e.g., What's the company culture like?"
+                       class="flex-1 px-4 py-2 border border-gray-600 bg-gray-700 text-gray-100 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                <button @click="sendMessage()" :disabled="loading || !input.trim()"
+                        class="btn-primary" :class="{ 'opacity-50': loading || !input.trim() }">
+                    <span x-show="!loading">Send</span>
+                    <span x-show="loading" x-cloak>...</span>
+                </button>
+            </div>
+            
+            <!-- Suggested Questions -->
+            <div class="mt-4 flex flex-wrap gap-2" x-show="messages.length === 0">
+                <button @click="input = 'What\'s the company culture like?'" 
+                        class="text-sm px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-full text-gray-300">
+                    What's the company culture like?
+                </button>
+                <button @click="input = 'What should I ask in the interview?'" 
+                        class="text-sm px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-full text-gray-300">
+                    What should I ask in the interview?
+                </button>
+                <button @click="input = 'What tech stack do they use?'" 
+                        class="text-sm px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-full text-gray-300">
+                    What tech stack do they use?
+                </button>
+            </div>
+            
+            <script>
+            function sendMessage() {
+                if (!this.input.trim() || this.loading) return;
+                
+                this.messages.push({ role: 'user', content: this.input });
+                this.loading = true;
+                
+                // TODO: Implement AI chat API
+                setTimeout(() => {
+                    this.messages.push({ 
+                        role: 'assistant', 
+                        content: '🚧 AI research agent coming soon! This will use Claude to research the company, analyze reviews, and answer your questions.' 
+                    });
+                    this.loading = false;
+                }, 500);
+                
+                this.input = '';
+            }
+            </script>
+        </div>
+    </div>
+    
+    <!-- Sidebar -->
+    <div class="space-y-6">
+        <!-- Application Status -->
+        {% if application %}
+        <div class="card">
+            <h3 class="text-lg font-semibold text-gray-100 mb-3">Application Status</h3>
+            <div class="space-y-3">
+                <div>
+                    <span class="inline-block px-3 py-1 rounded-full text-sm font-medium
+                                 {% if application.status == 'applied' %}bg-blue-900 text-blue-300
+                                 {% elif application.status == 'interview' %}bg-purple-900 text-purple-300
+                                 {% elif application.status == 'rejected' %}bg-red-900 text-red-300
+                                 {% elif application.status == 'offer' %}bg-green-900 text-green-300
+                                 {% else %}bg-gray-700 text-gray-300{% endif %}">
+                        {{ application.status.replace('_', ' ').title() }}
+                    </span>
+                </div>
+                {% if application.applied_date %}
+                <div class="text-sm text-gray-400">
+                    Applied: {{ application.applied_date.strftime('%m/%d/%Y') }}
+                </div>
+                {% endif %}
+                {% if application.notes %}
+                <div class="text-sm text-gray-300">
+                    <strong>Notes:</strong> {{ application.notes }}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Quick Actions -->
+        <div class="card">
+            <h3 class="text-lg font-semibold text-gray-100 mb-3">Quick Actions</h3>
+            <div class="space-y-2">
+                <button onclick="copyUrl()" class="w-full btn-secondary text-center py-2">
+                    Copy Job URL
+                </button>
+                <button onclick="shareJob()" class="w-full btn-secondary text-center py-2">
+                    Share Job
+                </button>
+            </div>
+        </div>
+        
+        <!-- Similar Jobs -->
+        <div class="card">
+            <h3 class="text-lg font-semibold text-gray-100 mb-3">Similar Jobs</h3>
+            <p class="text-sm text-gray-500 italic">Coming soon...</p>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function markAsApplied() {
+    const notes = prompt('Add notes (optional):');
+    
+    loading.show('Updating application status...');
+    
+    fetch('/api/application/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            job_id: {{ job.id }},
+            status: 'applied',
+            notes: notes || ''
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        loading.hide();
+        if (data.success) {
+            toast.success('Marked as applied!');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            toast.error('Failed to update');
+        }
+    })
+    .catch(error => {
+        loading.hide();
+        toast.error('Error updating application');
+        console.error(error);
+    });
+}
+
+function scheduleInterview() {
+    const date = prompt('Interview date and time (e.g., 2026-03-15 14:00):');
+    if (!date) return;
+    
+    const type = prompt('Interview type (phone, video, onsite):') || 'phone';
+    const notes = prompt('Notes (optional):');
+    
+    fetch('/api/interview/schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            job_id: {{ job.id }},
+            scheduled_date: date,
+            interview_type: type,
+            notes: notes || ''
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Interview scheduled! View it in the Calendar tab.');
+            location.reload();
+        }
+    })
+    .catch(error => {
+        alert('Error scheduling interview. Use format: YYYY-MM-DD HH:MM');
+        console.error(error);
+    });
+}
+
+function markNotInterested() {
+    const reason = prompt('Reason (optional): not_qualified, low_pay, not_relevant, etc.');
+    
+    fetch('/api/application/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            job_id: {{ job.id }},
+            status: 'not_applied',
+            rejection_reason: reason || 'not_interested'
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Marked as not interested');
+            window.location = '{{ url_for("index") }}';
+        }
+    });
+}
+
+function generateCoverLetter() {
+    if (!confirm('Generate AI cover letter for this job?')) return;
+    
+    loading.show('Generating cover letter with AI...');
+    
+    fetch('/api/cover-letter/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            job_id: {{ job.id }}
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(err => {
+                throw new Error(err.message || 'Server error');
+            });
+        }
+        return response.json();
+    })
+    .then(data => {
+        loading.hide();
+        
+        if (data.success) {
+            toast.success('Cover letter generated!');
+            
+            // Show cover letter in modal
+            const modal = document.createElement('div');
+            const escapedLetter = data.cover_letter.replace(/`/g, '\\`').replace(/\$/g, '\\$');
+            modal.innerHTML = `
+                <div style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:999;display:flex;align-items:center;justify-content:center;padding:20px;" onclick="this.remove()">
+                    <div style="background:#1f2937;padding:30px;border-radius:12px;max-width:800px;max-height:90vh;overflow-y:auto;color:#fff;box-shadow:0 20px 50px rgba(0,0,0,0.7);" onclick="event.stopPropagation()">
+                        <h2 style="font-size:24px;font-weight:bold;margin-bottom:20px;color:#60a5fa;">Cover Letter</h2>
+                        <div style="white-space:pre-wrap;line-height:1.8;color:#d1d5db;margin-bottom:20px;">${data.cover_letter.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+                        <div style="display:flex;gap:10px;">
+                            <button onclick="copyToClipboard()" style="background:#3b82f6;color:white;padding:10px 20px;border-radius:6px;border:none;cursor:pointer;font-weight:500;">Copy</button>
+                            <button onclick="this.closest('[style*=fixed]').remove()" style="background:#6b7280;color:white;padding:10px 20px;border-radius:6px;border:none;cursor:pointer;font-weight:500;">Close</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Store cover letter for copying
+            window.currentCoverLetter = data.cover_letter;
+            
+            document.body.appendChild(modal);
+        } else {
+            toast.error(data.message || 'Error generating cover letter');
+        }
+    })
+    .catch(error => {
+        loading.hide();
+        toast.error('Error: ' + error.message);
+        console.error('Cover letter error:', error);
+    });
+}
+
+function copyToClipboard() {
+    navigator.clipboard.writeText(window.currentCoverLetter).then(() => {
+        toast.success('Copied to clipboard!');
+    }).catch(err => {
+        console.error('Failed to copy:', err);
+        toast.error('Failed to copy to clipboard');
+    });
+}
+
+function copyUrl() {
+    navigator.clipboard.writeText('{{ job.url }}');
+    toast.success('URL copied to clipboard!');
+}
+
+function addToCalendar() {
+    alert('📅 Calendar integration coming soon!');
+}
+
+function shareJob() {
+    if (navigator.share) {
+        navigator.share({
+            title: '{{ job.title }}',
+            text: '{{ job.company }} - {{ job.title }}',
+            url: '{{ job.url }}'
+        });
+    } else {
+        copyUrl();
+    }
+}
+</script>
+{% endblock %}
+
+
+

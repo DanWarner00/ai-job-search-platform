@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics - Job Search Platform{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h1 class="text-3xl font-bold text-gray-100">Analytics</h1>
+    <p class="text-gray-400 mt-2">Track your job search progress and patterns</p>
+</div>
+
+<!-- Application Funnel -->
+<div class="card mb-6">
+    <h2 class="text-xl font-semibold text-gray-100 mb-6">Application Funnel</h2>
+    
+    <div class="space-y-4">
+        <!-- Viewed -->
+        <div>
+            <div class="flex justify-between mb-2">
+                <span class="text-sm font-medium text-gray-300">Viewed</span>
+                <span class="text-sm font-semibold text-gray-100">{{ stats.viewed }} (100%)</span>
+            </div>
+            <div class="w-full bg-gray-700 rounded-full h-6">
+                <div class="bg-blue-600 h-6 rounded-full" style="width: 100%"></div>
+            </div>
+        </div>
+        
+        <!-- Applied -->
+        <div>
+            <div class="flex justify-between mb-2">
+                <span class="text-sm font-medium text-gray-300">Applied</span>
+                <span class="text-sm font-semibold text-gray-100">
+                    {{ stats.applied }} 
+                    ({{ "%.0f"|format((stats.applied / stats.viewed * 100) if stats.viewed > 0 else 0) }}%)
+                </span>
+            </div>
+            <div class="w-full bg-gray-700 rounded-full h-6">
+                <div class="bg-blue-500 h-6 rounded-full" 
+                     style="width: {{ (stats.applied / stats.viewed * 100) if stats.viewed > 0 else 0 }}%"></div>
+            </div>
+        </div>
+        
+        <!-- Interviews -->
+        <div>
+            <div class="flex justify-between mb-2">
+                <span class="text-sm font-medium text-gray-300">Interviews</span>
+                <span class="text-sm font-semibold text-gray-100">
+                    {{ stats.interviews }} 
+                    ({{ "%.0f"|format((stats.interviews / stats.applied * 100) if stats.applied > 0 else 0) }}% of applied)
+                </span>
+            </div>
+            <div class="w-full bg-gray-700 rounded-full h-6">
+                <div class="bg-purple-500 h-6 rounded-full" 
+                     style="width: {{ (stats.interviews / stats.viewed * 100) if stats.viewed > 0 else 0 }}%"></div>
+            </div>
+        </div>
+        
+        <!-- Offers -->
+        <div>
+            <div class="flex justify-between mb-2">
+                <span class="text-sm font-medium text-gray-300">Offers</span>
+                <span class="text-sm font-semibold text-gray-100">
+                    {{ stats.offers }} 
+                    ({{ "%.0f"|format((stats.offers / stats.interviews * 100) if stats.interviews > 0 else 0) }}% of interviews)
+                </span>
+            </div>
+            <div class="w-full bg-gray-700 rounded-full h-6">
+                <div class="bg-green-500 h-6 rounded-full" 
+                     style="width: {{ (stats.offers / stats.viewed * 100) if stats.viewed > 0 else 0 }}%"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+

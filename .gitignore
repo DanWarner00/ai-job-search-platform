@@ -1,0 +1,70 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv
+
+# Environment variables (IMPORTANT - contains API keys!)
+.env
+
+# Database (contains personal job data)
+*.db
+*.sqlite
+*.sqlite3
+jobs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Uploaded files (resumes)
+static/uploads/*
+!static/uploads/.gitkeep
+
+# Logs
+*.log
+
+# Playwright browsers
+.playwright/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS
+Thumbs.db
+Desktop.ini
+
+# Temporary files
+*.tmp
+*.bak
+test_*.py
+check_*.py
+final_reset.py

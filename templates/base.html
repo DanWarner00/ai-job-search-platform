@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Job Search Platform{% endblock %}</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        gray: {
+                            750: '#2d3748',
+                            850: '#1a202e'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Alpine.js for interactivity -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    
+    <!-- Custom styles -->
+    <style>
+        [x-cloak] { display: none !important; }
+        
+        /* Smooth transitions for everything */
+        * {
+            transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform;
+            transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+            transition-duration: 150ms;
+        }
+        
+        /* Match score color classes */
+        .match-high { @apply bg-green-900 text-green-300 border-green-700; }
+        .match-medium { @apply bg-yellow-900 text-yellow-300 border-yellow-700; }
+        .match-low { @apply bg-red-900 text-red-300 border-red-700; }
+        
+        /* Status badge colors */
+        .status-applied { @apply bg-blue-900 text-blue-300; }
+        .status-interview { @apply bg-purple-900 text-purple-300; }
+        .status-rejected { @apply bg-red-900 text-red-300; }
+        .status-offer { @apply bg-green-900 text-green-300; }
+        .status-not_applied { @apply bg-gray-700 text-gray-300; }
+        
+        /* Card hover effects */
+        .card {
+            @apply transition-all duration-200;
+        }
+        .card:hover {
+            @apply shadow-lg transform scale-[1.01];
+        }
+        
+        /* Button loading state */
+        .btn-loading {
+            @apply opacity-70 cursor-not-allowed;
+            pointer-events: none;
+        }
+        
+        /* Smooth scrollbar */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 5px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+    </style>
+    
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-gray-900 min-h-screen">
+    
+    <!-- Navigation -->
+    <nav class="bg-gray-800 shadow-lg border-b border-gray-700">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-center h-16">
+                <div class="flex items-center space-x-3">
+                    <a href="{{ url_for('index') }}" 
+                       class="px-6 py-2 rounded-lg text-sm font-medium {% if request.endpoint == 'index' %}bg-green-700 bg-opacity-60 text-white{% else %}bg-green-800 bg-opacity-40 text-gray-200 hover:bg-opacity-60{% endif %} transition-all duration-200">
+                        Jobs
+                    </a>
+                    <a href="{{ url_for('applications') }}" 
+                       class="px-6 py-2 rounded-lg text-sm font-medium {% if request.endpoint == 'applications' %}bg-green-700 bg-opacity-60 text-white{% else %}bg-green-800 bg-opacity-40 text-gray-200 hover:bg-opacity-60{% endif %} transition-all duration-200">
+                        Applications
+                    </a>
+                    <a href="{{ url_for('analytics') }}" 
+                       class="px-6 py-2 rounded-lg text-sm font-medium {% if request.endpoint == 'analytics' %}bg-green-700 bg-opacity-60 text-white{% else %}bg-green-800 bg-opacity-40 text-gray-200 hover:bg-opacity-60{% endif %} transition-all duration-200">
+                        Analytics
+                    </a>
+                    <a href="{{ url_for('calendar') }}" 
+                       class="px-6 py-2 rounded-lg text-sm font-medium {% if request.endpoint == 'calendar' %}bg-green-700 bg-opacity-60 text-white{% else %}bg-green-800 bg-opacity-40 text-gray-200 hover:bg-opacity-60{% endif %} transition-all duration-200">
+                        Calendar
+                    </a>
+                    <a href="{{ url_for('settings') }}" 
+                       class="px-6 py-2 rounded-lg text-sm font-medium {% if request.endpoint == 'settings' %}bg-green-700 bg-opacity-60 text-white{% else %}bg-green-800 bg-opacity-40 text-gray-200 hover:bg-opacity-60{% endif %} transition-all duration-200">
+                        Settings
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- Flash messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} mb-4" role="alert">
+                        {{ message }}
+                        <button type="button" class="close" onclick="this.parentElement.remove()">
+                            <span>&times;</span>
+                        </button>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+    
+    <!-- Main content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {% block content %}{% endblock %}
+    </main>
+    
+    <!-- Footer -->
+    <footer class="bg-gray-800 border-t border-gray-700 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <p class="text-center text-gray-400 text-sm">
+                Built with OpenClaw | {{ jobs_count or 0 }} jobs tracked
+            </p>
+        </div>
+    </footer>
+    
+    <!-- Global styles -->
+    <style>
+        .btn-primary {
+            @apply px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition font-medium;
+        }
+        .btn-secondary {
+            @apply px-4 py-2 bg-gray-700 text-gray-100 border border-gray-600 rounded-md hover:bg-gray-600 transition font-medium;
+        }
+        .btn-icon {
+            @apply p-2 text-gray-400 hover:text-gray-200 hover:bg-gray-700 rounded-md transition;
+        }
+        .card {
+            @apply bg-gray-800 rounded-lg shadow-sm border border-gray-700 p-6;
+        }
+        .alert {
+            @apply px-4 py-3 rounded-md border;
+        }
+        .alert-success {
+            @apply bg-green-900 border-green-700 text-green-200;
+        }
+        .alert-error {
+            @apply bg-red-900 border-red-700 text-red-200;
+        }
+        .alert-info {
+            @apply bg-blue-900 border-blue-700 text-blue-200;
+        }
+        .close {
+            @apply ml-auto text-lg font-semibold opacity-50 hover:opacity-100;
+        }
+    </style>
+    
+    <!-- Global JavaScript utilities -->
+    <script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/loading.js') }}"></script>
+    
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

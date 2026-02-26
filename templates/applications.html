@@ -1,0 +1,361 @@
+{% extends "base.html" %}
+
+{% block title %}Application Tracker - Job Search Platform{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex items-center justify-between">
+    <div>
+        <h1 class="text-3xl font-bold text-gray-100">Application Tracker</h1>
+        <p class="text-gray-400 mt-2">Drag and drop jobs between columns to update their status</p>
+    </div>
+    <button onclick="scrapeJobs()" class="btn-primary" id="scrapeBtn">
+        Find New Jobs
+    </button>
+</div>
+
+<!-- Kanban Board -->
+<div class="grid grid-cols-1 lg:grid-cols-6 gap-3" 
+     x-data="kanbanBoard()" 
+     @dragover.prevent 
+     @drop="handleDrop($event)">
+    
+    <!-- Not Applied Column -->
+    <div class="flex flex-col">
+        <div class="bg-gray-700 rounded-t-lg px-3 py-2 border-b-4 border-gray-500">
+            <h2 class="font-semibold text-gray-100 text-sm">Not Applied</h2>
+            <span class="text-xs text-gray-400">({{ not_applied|length }})</span>
+        </div>
+        <div class="bg-gray-800 rounded-b-lg p-2 space-y-2 min-h-96 overflow-y-auto max-h-[600px]" 
+             data-status="not_applied"
+             @dragover.prevent="$el.classList.add('ring-2', 'ring-gray-500')"
+             @dragleave="$el.classList.remove('ring-2', 'ring-gray-500')"
+             @drop="$el.classList.remove('ring-2', 'ring-gray-500')">
+            
+            {% for job in not_applied[:50] %}
+            <div class="card cursor-move hover:shadow-lg transition p-3 text-xs" 
+                 draggable="true"
+                 data-job-id="{{ job.id }}"
+                 @dragstart="handleDragStart($event, {{ job.id }})">
+                <div class="font-semibold text-gray-100 mb-1 line-clamp-2">
+                    {{ job.title }}
+                </div>
+                <div class="text-gray-400 mb-1">{{ job.company }}</div>
+                {% if job.location %}
+                <div class="text-gray-500 mb-1">📍 {{ job.location }}</div>
+                {% endif %}
+                {% if job.salary_min and job.salary_max %}
+                <div class="text-green-400 mb-1">💰 ${{ "{:,}".format(job.salary_min) }}-${{ "{:,}".format(job.salary_max) }}</div>
+                {% endif %}
+                <a href="{{ job.url }}" target="_blank" class="text-blue-400 hover:text-blue-300 text-xs">
+                    🔗 View Job
+                </a>
+            </div>
+            {% else %}
+            <div class="text-center text-gray-500 py-8 text-sm">
+                No jobs here
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    
+    <!-- Applied Column -->
+    <div class="flex flex-col">
+        <div class="bg-blue-900 rounded-t-lg px-3 py-2 border-b-4 border-blue-600">
+            <h2 class="font-semibold text-blue-200 text-sm">Applied</h2>
+            <span class="text-xs text-blue-300">({{ applied|length }})</span>
+        </div>
+        <div class="bg-gray-800 rounded-b-lg p-2 space-y-2 min-h-96 overflow-y-auto max-h-[600px]"
+             data-status="applied"
+             @dragover.prevent="$el.classList.add('ring-2', 'ring-blue-500')"
+             @dragleave="$el.classList.remove('ring-2', 'ring-blue-500')"
+             @drop="$el.classList.remove('ring-2', 'ring-blue-500')">
+            
+            {% for app in applied %}
+            <div class="card cursor-move hover:shadow-lg transition p-3 text-xs" 
+                 draggable="true"
+                 data-job-id="{{ app.job.id }}"
+                 @dragstart="handleDragStart($event, {{ app.job.id }})">
+                <div class="font-semibold text-gray-100 mb-1 line-clamp-2">
+                    {{ app.job.title }}
+                </div>
+                <div class="text-gray-400 mb-1">{{ app.job.company }}</div>
+                {% if app.job.location %}
+                <div class="text-gray-500 mb-1">📍 {{ app.job.location }}</div>
+                {% endif %}
+                {% if app.job.salary_min and app.job.salary_max %}
+                <div class="text-green-400 mb-1">💰 ${{ "{:,}".format(app.job.salary_min) }}-${{ "{:,}".format(app.job.salary_max) }}</div>
+                {% endif %}
+                {% if app.applied_date %}
+                <div class="text-gray-500 mb-1">📅 {{ app.applied_date.strftime('%m/%d') }}</div>
+                {% endif %}
+                <a href="{{ app.job.url }}" target="_blank" class="text-blue-400 hover:text-blue-300 text-xs">
+                    🔗 View Job
+                </a>
+            </div>
+            {% else %}
+            <div class="text-center text-gray-500 py-8 text-sm">
+                No applications yet
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    
+    <!-- Interview Column -->
+    <div class="flex flex-col">
+        <div class="bg-purple-900 rounded-t-lg px-3 py-2 border-b-4 border-purple-600">
+            <h2 class="font-semibold text-purple-200 text-sm">Interview</h2>
+            <span class="text-xs text-purple-300">({{ interviews|length }})</span>
+        </div>
+        <div class="bg-gray-800 rounded-b-lg p-2 space-y-2 min-h-96 overflow-y-auto max-h-[600px]"
+             data-status="interview"
+             @dragover.prevent="$el.classList.add('ring-2', 'ring-purple-500')"
+             @dragleave="$el.classList.remove('ring-2', 'ring-purple-500')"
+             @drop="$el.classList.remove('ring-2', 'ring-purple-500')">
+            
+            {% for app in interviews %}
+            <div class="card cursor-move hover:shadow-lg transition p-3 text-xs" 
+                 draggable="true"
+                 data-job-id="{{ app.job.id }}"
+                 @dragstart="handleDragStart($event, {{ app.job.id }})">
+                <div class="font-semibold text-gray-100 mb-1 line-clamp-2">
+                    {{ app.job.title }}
+                </div>
+                <div class="text-gray-400 mb-1">{{ app.job.company }}</div>
+                {% if app.job.location %}
+                <div class="text-gray-500 mb-1">📍 {{ app.job.location }}</div>
+                {% endif %}
+                {% if app.job.salary_min and app.job.salary_max %}
+                <div class="text-green-400 mb-1">💰 ${{ "{:,}".format(app.job.salary_min) }}-${{ "{:,}".format(app.job.salary_max) }}</div>
+                {% endif %}
+                <a href="{{ app.job.url }}" target="_blank" class="text-blue-400 hover:text-blue-300 text-xs">
+                    🔗 View Job
+                </a>
+            </div>
+            {% else %}
+            <div class="text-center text-gray-500 py-8 text-sm">
+                No interviews yet
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    
+    <!-- Rejected Column -->
+    <div class="flex flex-col">
+        <div class="bg-red-900 rounded-t-lg px-3 py-2 border-b-4 border-red-600">
+            <h2 class="font-semibold text-red-200 text-sm">Rejected</h2>
+            <span class="text-xs text-red-300">({{ rejected|length }})</span>
+        </div>
+        <div class="bg-gray-800 rounded-b-lg p-2 space-y-2 min-h-96 overflow-y-auto max-h-[600px]"
+             data-status="rejected"
+             @dragover.prevent="$el.classList.add('ring-2', 'ring-red-500')"
+             @dragleave="$el.classList.remove('ring-2', 'ring-red-500')"
+             @drop="$el.classList.remove('ring-2', 'ring-red-500')">
+            
+            {% for app in rejected %}
+            <div class="card cursor-move hover:shadow-lg transition p-3 text-xs" 
+                 draggable="true"
+                 data-job-id="{{ app.job.id }}"
+                 @dragstart="handleDragStart($event, {{ app.job.id }})">
+                <div class="font-semibold text-gray-100 mb-1 line-clamp-2">
+                    {{ app.job.title }}
+                </div>
+                <div class="text-gray-400 mb-1">{{ app.job.company }}</div>
+                {% if app.job.location %}
+                <div class="text-gray-500 mb-1">📍 {{ app.job.location }}</div>
+                {% endif %}
+                {% if app.job.salary_min and app.job.salary_max %}
+                <div class="text-green-400 mb-1">💰 ${{ "{:,}".format(app.job.salary_min) }}-${{ "{:,}".format(app.job.salary_max) }}</div>
+                {% endif %}
+                <a href="{{ app.job.url }}" target="_blank" class="text-blue-400 hover:text-blue-300 text-xs">
+                    🔗 View Job
+                </a>
+            </div>
+            {% else %}
+            <div class="text-center text-gray-500 py-8 text-sm">
+                No rejections
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    
+    <!-- Not Interested Column (AI will learn from this) -->
+    <div class="flex flex-col">
+        <div class="bg-orange-900 rounded-t-lg px-3 py-2 border-b-4 border-orange-600">
+            <h2 class="font-semibold text-orange-200 text-sm">Not Interested</h2>
+            <span class="text-xs text-orange-300">({{ not_interested|length }})</span>
+        </div>
+        <div class="bg-gray-800 rounded-b-lg p-2 space-y-2 min-h-96 overflow-y-auto max-h-[600px]"
+             data-status="not_interested"
+             @dragover.prevent="$el.classList.add('ring-2', 'ring-orange-500')"
+             @dragleave="$el.classList.remove('ring-2', 'ring-orange-500')"
+             @drop="$el.classList.remove('ring-2', 'ring-orange-500')">
+            
+            {% for app in not_interested %}
+            <div class="card cursor-move hover:shadow-lg transition p-3 text-xs opacity-75" 
+                 draggable="true"
+                 data-job-id="{{ app.job.id }}"
+                 @dragstart="handleDragStart($event, {{ app.job.id }})">
+                <div class="font-semibold text-gray-100 mb-1 line-clamp-2">
+                    {{ app.job.title }}
+                </div>
+                <div class="text-gray-400 mb-1">{{ app.job.company }}</div>
+                {% if app.job.location %}
+                <div class="text-gray-500 mb-1">📍 {{ app.job.location }}</div>
+                {% endif %}
+                {% if app.job.salary_min and app.job.salary_max %}
+                <div class="text-green-400 mb-1">💰 ${{ "{:,}".format(app.job.salary_min) }}-${{ "{:,}".format(app.job.salary_max) }}</div>
+                {% endif %}
+                <a href="{{ app.job.url }}" target="_blank" class="text-blue-400 hover:text-blue-300 text-xs">
+                    🔗 View Job
+                </a>
+            </div>
+            {% else %}
+            <div class="text-center text-gray-500 py-8 text-sm">
+                No jobs marked
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    
+    <!-- Inactive Column (jobs older than 3 weeks) -->
+    <div class="flex flex-col">
+        <div class="bg-gray-700 rounded-t-lg px-3 py-2 border-b-4 border-gray-600">
+            <h2 class="font-semibold text-gray-300 text-sm">Inactive</h2>
+            <span class="text-xs text-gray-400">({{ inactive|length }})</span>
+        </div>
+        <div class="bg-gray-800 rounded-b-lg p-2 space-y-2 min-h-96 overflow-y-auto max-h-[600px]"
+             data-status="inactive"
+             @dragover.prevent="$el.classList.add('ring-2', 'ring-gray-500')"
+             @dragleave="$el.classList.remove('ring-2', 'ring-gray-500')"
+             @drop="$el.classList.remove('ring-2', 'ring-gray-500')">
+            
+            {% for app in inactive %}
+            <div class="card cursor-move hover:shadow-lg transition p-3 text-xs opacity-75" 
+                 draggable="true"
+                 data-job-id="{{ app.job.id }}"
+                 @dragstart="handleDragStart($event, {{ app.job.id }})">
+                <div class="font-semibold text-gray-300 mb-1 line-clamp-2">
+                    {{ app.job.title }}
+                </div>
+                <div class="text-gray-500 mb-1">{{ app.job.company }}</div>
+                {% if app.job.location %}
+                <div class="text-gray-600 mb-1">📍 {{ app.job.location }}</div>
+                {% endif %}
+                {% if app.job.salary_min and app.job.salary_max %}
+                <div class="text-green-500 mb-1">💰 ${{ "{:,}".format(app.job.salary_min) }}-${{ "{:,}".format(app.job.salary_max) }}</div>
+                {% endif %}
+                {% if app.applied_date %}
+                <div class="text-gray-600 mb-1">📅 {{ app.applied_date.strftime('%m/%d') }}</div>
+                {% endif %}
+                <a href="{{ app.job.url }}" target="_blank" class="text-blue-400 hover:text-blue-300 text-xs">
+                    🔗 View Job
+                </a>
+            </div>
+            {% else %}
+            <div class="text-center text-gray-500 py-8 text-sm">
+                No inactive jobs
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- AI Learning Notice -->
+<div class="mt-6 card bg-blue-900 bg-opacity-30 border-blue-700">
+    <div>
+        <h3 class="text-lg font-semibold text-blue-200 mb-2">AI Learning</h3>
+        <p class="text-blue-300 text-sm">
+            Jobs you move to <strong>"Not Interested"</strong> will help train the AI to better match your preferences. 
+            The system will learn which types of jobs, companies, requirements, or salary ranges you're not interested in 
+            and improve future job recommendations.
+        </p>
+        <p class="text-blue-400 text-xs mt-2">
+            Coming soon: AI will automatically filter out similar jobs based on your feedback
+        </p>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function scrapeJobs() {
+    const btn = document.getElementById('scrapeBtn');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = 'Scraping...';
+    
+    fetch('/api/scrape/run', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        
+        if (data.success) {
+            alert(`✅ ${data.message}\n\nRefreshing page...`);
+            location.reload();
+        } else {
+            alert(`❌ ${data.message}`);
+        }
+    })
+    .catch(error => {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        alert('❌ Error scraping jobs. Check console for details.');
+        console.error(error);
+    });
+}
+
+function kanbanBoard() {
+    return {
+        draggedJobId: null,
+        
+        handleDragStart(event, jobId) {
+            this.draggedJobId = jobId;
+            event.dataTransfer.effectAllowed = 'move';
+        },
+        
+        handleDrop(event) {
+            event.preventDefault();
+            
+            const dropZone = event.target.closest('[data-status]');
+            if (!dropZone || !this.draggedJobId) return;
+            
+            const newStatus = dropZone.dataset.status;
+            
+            this.updateApplicationStatus(this.draggedJobId, newStatus);
+        },
+        
+        updateApplicationStatus(jobId, status) {
+            fetch('/api/application/update', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    job_id: jobId,
+                    status: status
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                }
+            })
+            .catch(error => {
+                alert('Error updating status');
+                console.error(error);
+            });
+        }
+    }
+}
+</script>
+{% endblock %}
+
+

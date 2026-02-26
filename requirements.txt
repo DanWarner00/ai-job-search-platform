@@ -1,0 +1,33 @@
+# Flask web framework
+Flask==3.0.0
+Flask-SQLAlchemy==3.1.1
+
+# Web scraping
+beautifulsoup4==4.12.2
+playwright==1.40.0
+requests==2.31.0
+
+# AI & NLP
+anthropic>=0.40.0
+PyPDF2==3.0.1
+
+# Database
+SQLAlchemy==2.0.23
+
+# Background tasks
+celery==5.3.4
+redis==5.0.1
+
+# Email & notifications
+google-api-python-client==2.108.0
+google-auth-httplib2==0.2.0
+google-auth-oauthlib==1.2.0
+python-telegram-bot==20.7
+
+# Utilities
+python-dotenv==1.0.0
+python-dateutil==2.8.2
+
+# Testing
+pytest==7.4.3
+pytest-flask==1.3.0

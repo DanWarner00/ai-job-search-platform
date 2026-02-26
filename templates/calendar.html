@@ -1,0 +1,369 @@
+{% extends "base.html" %}
+
+{% block title %}Calendar - Job Search Platform{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex items-center justify-between">
+    <div>
+        <h1 class="text-3xl font-bold text-gray-100">Interview Calendar</h1>
+        <p class="text-gray-400 mt-2">Schedule and track your interviews</p>
+    </div>
+    <button onclick="showAddInterviewModal()" class="btn-primary">
+        + Add Interview
+    </button>
+</div>
+
+<!-- Calendar Navigation -->
+<div class="card mb-6">
+    <div class="flex items-center justify-between mb-6">
+        <a href="{{ url_for('calendar', year=prev_year, month=prev_month) }}" 
+           class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg transition flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+            </svg>
+            Previous
+        </a>
+        <h2 class="text-2xl font-bold text-gray-100">{{ month_name }} {{ year }}</h2>
+        <a href="{{ url_for('calendar', year=next_year, month=next_month) }}" 
+           class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg transition flex items-center gap-2">
+            Next
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+        </a>
+    </div>
+    
+    <!-- Calendar Grid -->
+    <div class="grid grid-cols-7 gap-3">
+        <!-- Day headers -->
+        <div class="text-center font-bold text-gray-200 py-3 bg-gray-750 rounded-t-lg">Sun</div>
+        <div class="text-center font-bold text-gray-200 py-3 bg-gray-750 rounded-t-lg">Mon</div>
+        <div class="text-center font-bold text-gray-200 py-3 bg-gray-750 rounded-t-lg">Tue</div>
+        <div class="text-center font-bold text-gray-200 py-3 bg-gray-750 rounded-t-lg">Wed</div>
+        <div class="text-center font-bold text-gray-200 py-3 bg-gray-750 rounded-t-lg">Thu</div>
+        <div class="text-center font-bold text-gray-200 py-3 bg-gray-750 rounded-t-lg">Fri</div>
+        <div class="text-center font-bold text-gray-200 py-3 bg-gray-750 rounded-t-lg">Sat</div>
+        
+        <!-- Calendar days -->
+        {% for week in calendar %}
+            {% for day in week %}
+                {% if day == 0 %}
+                <div class="bg-gray-850 border border-gray-700 rounded-lg p-3 min-h-32 opacity-50"></div>
+                {% else %}
+                    {% set is_today = (day == today.day and month == today.month and year == today.year) %}
+                    {% set has_interviews = namespace(found=false) %}
+                    {% for date_key, day_interviews in interviews_by_date.items() %}
+                        {% if date_key.day == day and date_key.month == month and date_key.year == year %}
+                            {% set has_interviews.found = true %}
+                        {% endif %}
+                    {% endfor %}
+                    
+                    <div class="bg-gray-800 border-2 
+                                {% if is_today %}border-blue-500 ring-2 ring-blue-500 ring-opacity-30
+                                {% elif has_interviews.found %}border-green-600
+                                {% else %}border-gray-700{% endif %} 
+                                rounded-lg p-3 min-h-32 hover:bg-gray-750 transition cursor-pointer"
+                         onclick="quickAddInterview({{ year }}, {{ month }}, {{ day }})">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="text-base font-semibold 
+                                        {% if is_today %}text-blue-400
+                                        {% else %}text-gray-200{% endif %}">
+                                {{ day }}
+                            </div>
+                            {% if is_today %}
+                            <span class="text-xs bg-blue-600 text-blue-100 px-2 py-0.5 rounded-full font-medium">Today</span>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Show interviews for this day -->
+                        {% for date_key, day_interviews in interviews_by_date.items() %}
+                            {% if date_key.day == day and date_key.month == month and date_key.year == year %}
+                                {% for interview in day_interviews %}
+                                <div class="text-xs bg-gradient-to-r 
+                                            {% if interview.interview_type == 'phone' %}from-blue-900 to-blue-800 border-blue-600
+                                            {% elif interview.interview_type == 'video' %}from-purple-900 to-purple-800 border-purple-600
+                                            {% else %}from-green-900 to-green-800 border-green-600{% endif %}
+                                            border rounded-lg p-2 mb-1 hover:scale-105 transition"
+                                     onclick="event.stopPropagation(); viewInterview({{ interview.id }})">
+                                    <div class="font-bold text-white mb-0.5">
+                                        {% if interview.scheduled_date %}
+                                            {{ interview.scheduled_date.strftime('%I:%M %p') }}
+                                        {% else %}
+                                            TBD
+                                        {% endif %}
+                                    </div>
+                                    <div class="text-gray-100 truncate font-medium">
+                                        {{ interview.application.job.company }}
+                                    </div>
+                                    <div class="text-gray-300 text-xs capitalize mt-1">
+                                        {{ interview.interview_type }}
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endfor %}
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Upcoming Interviews List -->
+<div class="card">
+    <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl font-semibold text-gray-100">Upcoming Interviews</h2>
+        <span class="text-sm text-gray-400">{{ upcoming_interviews|length }} scheduled</span>
+    </div>
+    
+    {% if upcoming_interviews %}
+    <div class="space-y-4">
+        {% for interview in upcoming_interviews %}
+        <div class="p-5 bg-gradient-to-r from-gray-800 to-gray-750 rounded-xl border-l-4 
+                    {% if interview.interview_type == 'phone' %}border-blue-500
+                    {% elif interview.interview_type == 'video' %}border-purple-500
+                    {% else %}border-green-500{% endif %}
+                    hover:shadow-lg transition">
+            <div class="flex items-start justify-between">
+                <div class="flex-1">
+                    <div class="flex items-center gap-3 mb-2">
+                        <div class="text-lg font-bold text-gray-100">
+                            {{ interview.application.job.title }}
+                        </div>
+                        <span class="px-3 py-1 text-xs font-semibold rounded-full
+                                     {% if interview.interview_type == 'phone' %}bg-blue-900 text-blue-200
+                                     {% elif interview.interview_type == 'video' %}bg-purple-900 text-purple-200
+                                     {% else %}bg-green-900 text-green-200{% endif %}">
+                            {{ interview.interview_type|capitalize }}
+                        </span>
+                    </div>
+                    <div class="text-gray-300 mb-3">
+                        {{ interview.application.job.company }}
+                    </div>
+                    <div class="flex items-center gap-4 text-sm text-gray-400 mb-2">
+                        <div class="flex items-center gap-1">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            </svg>
+                            {% if interview.scheduled_date %}
+                                {{ interview.scheduled_date.strftime('%B %d, %Y at %I:%M %p') }}
+                            {% else %}
+                                Date TBD
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% if interview.notes %}
+                    <div class="text-sm text-gray-300 mt-3 p-3 bg-gray-900 bg-opacity-50 rounded-lg border border-gray-700">
+                        <span class="text-gray-400 font-medium">Notes:</span> {{ interview.notes }}
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="flex flex-col gap-2 ml-4">
+                    <a href="{{ url_for('job_detail', job_id=interview.application.job_id) }}" 
+                       class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition text-center">
+                        View Job
+                    </a>
+                    <button onclick="deleteInterview({{ interview.id }})"
+                            class="px-4 py-2 bg-red-900 hover:bg-red-800 text-red-200 text-sm rounded-lg transition">
+                        Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-12">
+        <svg class="w-16 h-16 mx-auto text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+        <p class="text-gray-400 text-lg">No upcoming interviews scheduled</p>
+        <button onclick="showAddInterviewModal()" class="btn-primary mt-4">
+            Schedule Your First Interview
+        </button>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Add Interview Modal -->
+<div id="addInterviewModal" class="hidden fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-4">
+    <div class="bg-gray-800 rounded-xl shadow-2xl max-w-2xl w-full p-8 border border-gray-700">
+        <div class="flex items-center justify-between mb-6">
+            <h3 class="text-2xl font-bold text-gray-100">Schedule Interview</h3>
+            <button onclick="closeAddInterviewModal()" class="text-gray-400 hover:text-gray-200">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        
+        <form id="addInterviewForm" class="space-y-5">
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-2">Job/Company *</label>
+                <select id="jobSelect" required class="w-full px-4 py-3 border border-gray-600 bg-gray-700 text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">Select a job...</option>
+                    <!-- Will be populated with jobs from database -->
+                </select>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Date *</label>
+                    <input type="date" id="interviewDate" required 
+                           class="w-full px-4 py-3 border border-gray-600 bg-gray-700 text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Time *</label>
+                    <input type="time" id="interviewTime" required 
+                           class="w-full px-4 py-3 border border-gray-600 bg-gray-700 text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-2">Interview Type *</label>
+                <select id="interviewType" required class="w-full px-4 py-3 border border-gray-600 bg-gray-700 text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <option value="phone">Phone</option>
+                    <option value="video">Video</option>
+                    <option value="onsite">Onsite</option>
+                </select>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-2">Notes (optional)</label>
+                <textarea id="interviewNotes" rows="3" 
+                          class="w-full px-4 py-3 border border-gray-600 bg-gray-700 text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="Interviewer name, preparation notes, etc."></textarea>
+            </div>
+            
+            <div class="flex gap-3 pt-4">
+                <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-lg transition">
+                    Schedule Interview
+                </button>
+                <button type="button" onclick="closeAddInterviewModal()" 
+                        class="px-6 bg-gray-700 hover:bg-gray-600 text-gray-200 font-medium py-3 rounded-lg transition">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Load jobs for the dropdown
+async function loadJobs() {
+    try {
+        const response = await fetch('/api/jobs/list');
+        const jobs = await response.json();
+        
+        const select = document.getElementById('jobSelect');
+        select.innerHTML = '<option value="">Select a job...</option>';
+        
+        jobs.forEach(job => {
+            const option = document.createElement('option');
+            option.value = job.id;
+            option.textContent = `${job.title} at ${job.company}`;
+            select.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error loading jobs:', error);
+    }
+}
+
+function showAddInterviewModal() {
+    document.getElementById('addInterviewModal').classList.remove('hidden');
+    loadJobs();
+}
+
+function closeAddInterviewModal() {
+    document.getElementById('addInterviewModal').classList.add('hidden');
+    document.getElementById('addInterviewForm').reset();
+}
+
+function quickAddInterview(year, month, day) {
+    showAddInterviewModal();
+    // Pre-fill the date
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    document.getElementById('interviewDate').value = dateStr;
+}
+
+document.getElementById('addInterviewForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const jobId = document.getElementById('jobSelect').value;
+    const date = document.getElementById('interviewDate').value;
+    const time = document.getElementById('interviewTime').value;
+    const type = document.getElementById('interviewType').value;
+    const notes = document.getElementById('interviewNotes').value;
+    
+    if (!jobId) {
+        toast.warning('Please select a job');
+        return;
+    }
+    
+    loading.show('Scheduling interview...');
+    
+    try {
+        const response = await fetch('/api/interview/schedule', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                job_id: parseInt(jobId),
+                scheduled_date: `${date} ${time}`,
+                interview_type: type,
+                notes: notes
+            })
+        });
+        
+        const data = await response.json();
+        
+        loading.hide();
+        
+        if (data.success) {
+            toast.success('Interview scheduled successfully!');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            toast.error('Error: ' + data.message);
+        }
+    } catch (error) {
+        loading.hide();
+        toast.error('Error scheduling interview');
+        console.error(error);
+    }
+});
+
+function viewInterview(id) {
+    // Could open a modal with interview details
+    console.log('View interview:', id);
+}
+
+async function deleteInterview(id) {
+    if (!confirm('Delete this interview?')) return;
+    
+    loading.show('Deleting interview...');
+    
+    try {
+        const response = await fetch(`/api/interview/${id}/delete`, {
+            method: 'DELETE'
+        });
+        
+        const data = await response.json();
+        
+        loading.hide();
+        
+        if (data.success) {
+            toast.success('Interview deleted');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            toast.error('Error: ' + data.message);
+        }
+    } catch (error) {
+        loading.hide();
+        toast.error('Error deleting interview');
+        console.error(error);
+    }
+}
+</script>
+{% endblock %}

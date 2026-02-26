@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Cover Letter API</title>
+</head>
+<body style="background:#111;color:#fff;padding:40px;font-family:sans-serif;">
+    <h1>Cover Letter API Test</h1>
+    <button onclick="testAPI()" style="background:#3b82f6;color:white;padding:15px 30px;font-size:18px;border:none;border-radius:8px;cursor:pointer;">
+        Test Cover Letter Generation
+    </button>
+    <div id="result" style="margin-top:20px;white-space:pre-wrap;"></div>
+    
+    <script>
+    function testAPI() {
+        const jobId = parseInt(prompt('Enter job ID (check the URL when viewing a job):'));
+        if (!jobId) return;
+        
+        document.getElementById('result').textContent = 'Loading...';
+        
+        fetch('/api/cover-letter/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ job_id: jobId })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('result').textContent = 'SUCCESS!\n\n' + data.cover_letter;
+            } else {
+                document.getElementById('result').textContent = 'ERROR: ' + data.message;
+            }
+        })
+        .catch(error => {
+            document.getElementById('result').textContent = 'FETCH ERROR: ' + error.message;
+        });
+    }
+    </script>
+</body>
+</html>
