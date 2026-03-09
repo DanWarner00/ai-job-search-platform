@@ -5,14 +5,15 @@ import anthropic
 import os
 
 
-def calculate_match_score(resume_text, job):
+def calculate_match_score(resume_text, job, prefs=None):
     """
     Calculate match score (0-100) between resume and job using Claude
-    
+
     Args:
         resume_text: Full text from resume
         job: Job object with title, description, requirements, etc.
-    
+        prefs: Optional SearchPreferences object for keyword/goal context
+
     Returns:
         tuple: (score: int, explanation: str) - Match score 0-100 and explanation
     """
@@ -39,10 +40,18 @@ Description: {job.description[:1000] if job.description else 'Not provided'}
 Requirements: {job.requirements[:500] if job.requirements else 'Not provided'}
 """
         
+        prefs_context = ""
+        if prefs:
+            if prefs.keywords and prefs.keywords.strip():
+                prefs_context += f"\nCandidate's Priority Keywords: {prefs.keywords.strip()}"
+            if prefs.search_description and prefs.search_description.strip():
+                prefs_context += f"\nCandidate's Search Goals: {prefs.search_description.strip()}"
+
         prompt = f"""Analyze this job posting against the candidate's resume and provide a match score and explanation.
 
 RESUME:
 {resume_text[:3000]}
+{prefs_context}
 
 JOB POSTING:
 {job_details}
@@ -50,7 +59,7 @@ JOB POSTING:
 Evaluate based on:
 - Skills match (technical skills, tools, languages)
 - Experience level fit
-- Industry/domain alignment
+- Industry/domain alignment — weight higher if job aligns with candidate's priority keywords
 - Location preferences
 - Role responsibilities match
 
@@ -63,7 +72,7 @@ SCORE: 85
 EXPLANATION: Strong match with 5+ years Python experience and ML background aligning with role requirements. Resume shows direct experience with required frameworks (TensorFlow, PyTorch). Minor gap in cloud infrastructure experience but transferable skills present."""
 
         message = client.messages.create(
-            model="claude-3-5-haiku-20241022",  # Cheaper/faster for scoring
+            model="claude-haiku-4-5-20251001",
             max_tokens=200,
             messages=[{
                 "role": "user",
@@ -101,15 +110,70 @@ EXPLANATION: Strong match with 5+ years Python experience and ML background alig
         return (75, None)  # Default fallback
 
 
-def batch_score_jobs(resume_text, jobs, limit=10):
+def generate_match_analysis(resume_text, job, prefs=None):
     """
-    Score multiple jobs efficiently
-    Only scores top N jobs to save API calls
+    Generate a detailed, personalized match analysis for a specific job.
+    Called on-demand by the user rather than automatically during scraping.
+
+    Args:
+        resume_text: Full text from resume
+        job: Job object
+        prefs: Optional SearchPreferences object
+
+    Returns:
+        str: Detailed analysis paragraph
     """
-    scored_jobs = []
-    
-    for job in jobs[:limit]:
-        score = calculate_match_score(resume_text, job)
-        scored_jobs.append((job, score))
-    
-    return scored_jobs
+    api_key = os.getenv('CLAUDE_API_KEY')
+
+    if not api_key:
+        return "Claude API key not configured."
+
+    if not resume_text:
+        return "No resume found. Please upload your resume first."
+
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+
+        salary_str = f"${job.salary_min:,} - ${job.salary_max:,}" if job.salary_min and job.salary_max else 'Not specified'
+        job_details = f"""Job Title: {job.title}
+Company: {job.company}
+Location: {job.location or 'Not specified'}
+Salary: {salary_str}
+Description: {job.description[:2000] if job.description else 'Not provided'}
+Requirements: {job.requirements[:1000] if job.requirements else 'Not provided'}"""
+
+        search_context = ""
+        if prefs:
+            if prefs.search_description:
+                search_context += f"\nCandidate's Job Search Goals: {prefs.search_description}"
+            if prefs.work_experience:
+                search_context += f"\nAdditional Work Experience Context: {prefs.work_experience}"
+
+        prompt = f"""You are helping a job seeker understand how well a specific job matches their profile. Be honest, specific, and personal — reference actual details from their resume and the job posting.
+
+CANDIDATE RESUME:
+{resume_text[:3000]}
+{search_context}
+
+JOB POSTING:
+{job_details}
+
+Write 3-4 sentences covering:
+- Specific skills or experience from the resume that align with this role
+- Any meaningful gaps or concerns
+- Whether this role fits their apparent career direction
+- A candid overall take
+
+Be direct and concrete. Reference actual resume details and job requirements — not generic advice."""
+
+        message = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=400,
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        return message.content[0].text.strip()
+
+    except Exception as e:
+        print(f"Error generating match analysis: {e}")
+        return f"Could not generate analysis: {str(e)}"

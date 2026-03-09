@@ -14,15 +14,16 @@ class LoadingOverlay {
 
         this.overlay = document.createElement('div');
         this.overlay.id = 'loading-overlay';
-        this.overlay.className = 'fixed inset-0 bg-black bg-opacity-75 z-[60] flex items-center justify-center';
+        this.overlay.setAttribute('style', 'position:fixed;inset:0;background:rgba(26,24,20,0.50);z-index:60;display:flex;align-items:center;justify-content:center;');
         this.overlay.innerHTML = `
-            <div class="bg-gray-800 rounded-xl shadow-2xl p-8 flex flex-col items-center gap-4 border border-gray-700">
-                <div class="relative w-16 h-16">
-                    <div class="absolute inset-0 border-4 border-gray-600 rounded-full"></div>
-                    <div class="absolute inset-0 border-4 border-blue-500 rounded-full border-t-transparent animate-spin"></div>
+            <div style="background:#ede8df;border:1px solid #ddd8d0;border-radius:8px;padding:32px;display:flex;flex-direction:column;align-items:center;gap:16px;box-shadow:0 12px 40px rgba(26,24,20,0.12);">
+                <div style="position:relative;width:48px;height:48px;">
+                    <div style="position:absolute;inset:0;border:3px solid #ddd8d0;border-radius:50%;"></div>
+                    <div style="position:absolute;inset:0;border:3px solid #c84b2f;border-radius:50%;border-top-color:transparent;animation:spin 0.8s linear infinite;"></div>
                 </div>
-                <div class="text-gray-200 font-medium text-lg">${message}</div>
+                <div style="font-family:'DM Mono',monospace;font-size:12px;letter-spacing:0.06em;color:#6b6560;text-transform:uppercase;">${message}</div>
             </div>
+            <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
         `;
         
         document.body.appendChild(this.overlay);

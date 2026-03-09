@@ -17,9 +17,6 @@ class Config:
     GMAIL_CLIENT_ID = os.getenv('GMAIL_CLIENT_ID')
     GMAIL_CLIENT_SECRET = os.getenv('GMAIL_CLIENT_SECRET')
     GMAIL_REFRESH_TOKEN = os.getenv('GMAIL_REFRESH_TOKEN')
-    TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-    TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
-    
     # Scraping settings
     SCRAPE_FREQUENCY_HOURS = int(os.getenv('SCRAPE_FREQUENCY_HOURS', 24))
     MAX_JOBS_PER_BOARD = int(os.getenv('MAX_JOBS_PER_BOARD', 50))

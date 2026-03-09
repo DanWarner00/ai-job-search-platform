@@ -52,9 +52,31 @@ try:
         except:
             print('   ⚠️  Could not rename uploaded_date column')
     
+    # Add profile columns to search_preferences
+    for col, definition in [
+        ('name', 'VARCHAR(100) DEFAULT "Default"'),
+        ('is_active', 'BOOLEAN DEFAULT 1'),
+        ('work_experience', 'TEXT'),
+    ]:
+        try:
+            cursor.execute(f"ALTER TABLE search_preferences ADD COLUMN {col} {definition}")
+            print(f'   ✅ Added {col} column to search_preferences')
+        except sqlite3.OperationalError as e:
+            if 'duplicate column name' in str(e).lower():
+                print(f'   ⏭️  {col} column already exists')
+            else:
+                raise
+
+    # Set the first preference record as active if none are active
+    try:
+        cursor.execute("UPDATE search_preferences SET is_active = 1 WHERE id = (SELECT MIN(id) FROM search_preferences) AND NOT EXISTS (SELECT 1 FROM search_preferences WHERE is_active = 1)")
+        print('   ✅ Ensured one active preference profile')
+    except Exception as e:
+        print(f'   ⚠️  Could not set active profile: {e}')
+
     conn.commit()
     conn.close()
-    
+
     print('✅ Migration complete!')
     
 except Exception as e:

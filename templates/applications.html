@@ -8,9 +8,9 @@
         <h1 class="text-3xl font-bold text-gray-100">Application Tracker</h1>
         <p class="text-gray-400 mt-2">Drag and drop jobs between columns to update their status</p>
     </div>
-    <button onclick="scrapeJobs()" class="btn-primary" id="scrapeBtn">
+    <a href="{{ url_for('index') }}" class="btn-primary">
         Find New Jobs
-    </button>
+    </a>
 </div>
 
 <!-- Kanban Board -->
@@ -31,12 +31,15 @@
              @dragleave="$el.classList.remove('ring-2', 'ring-gray-500')"
              @drop="$el.classList.remove('ring-2', 'ring-gray-500')">
             
-            {% for job in not_applied[:50] %}
-            <div class="card cursor-move hover:shadow-lg transition p-3 text-xs" 
+            {% for job in not_applied[:200] %}
+            <div class="card cursor-move hover:shadow-lg transition p-3 text-xs relative"
                  draggable="true"
                  data-job-id="{{ job.id }}"
                  @dragstart="handleDragStart($event, {{ job.id }})">
-                <div class="font-semibold text-gray-100 mb-1 line-clamp-2">
+                <button onclick="deleteJob({{ job.id }}, this)" title="Delete job"
+                        class="absolute top-1.5 right-1.5 text-gray-600 hover:text-red-400 transition-colors leading-none text-base w-5 h-5 flex items-center justify-center rounded hover:bg-red-900 hover:bg-opacity-30">&times;</button>
+                {% if job.starred %}<span class="absolute top-1.5 left-1.5 text-yellow-400 text-xs leading-none">★</span>{% endif %}
+                <div class="font-semibold text-gray-100 mb-1 line-clamp-2 pr-4 {% if job.starred %}pl-4{% endif %}">
                     {{ job.title }}
                 </div>
                 <div class="text-gray-400 mb-1">{{ job.company }}</div>
@@ -71,11 +74,13 @@
              @drop="$el.classList.remove('ring-2', 'ring-blue-500')">
             
             {% for app in applied %}
-            <div class="card cursor-move hover:shadow-lg transition p-3 text-xs" 
+            <div class="card cursor-move hover:shadow-lg transition p-3 text-xs relative"
                  draggable="true"
                  data-job-id="{{ app.job.id }}"
                  @dragstart="handleDragStart($event, {{ app.job.id }})">
-                <div class="font-semibold text-gray-100 mb-1 line-clamp-2">
+                <button onclick="deleteJob({{ app.job.id }}, this)" title="Delete job"
+                        class="absolute top-1.5 right-1.5 text-gray-600 hover:text-red-400 transition-colors leading-none text-base w-5 h-5 flex items-center justify-center rounded hover:bg-red-900 hover:bg-opacity-30">&times;</button>
+                <div class="font-semibold text-gray-100 mb-1 line-clamp-2 pr-4">
                     {{ app.job.title }}
                 </div>
                 <div class="text-gray-400 mb-1">{{ app.job.company }}</div>
@@ -113,11 +118,13 @@
              @drop="$el.classList.remove('ring-2', 'ring-purple-500')">
             
             {% for app in interviews %}
-            <div class="card cursor-move hover:shadow-lg transition p-3 text-xs" 
+            <div class="card cursor-move hover:shadow-lg transition p-3 text-xs relative"
                  draggable="true"
                  data-job-id="{{ app.job.id }}"
                  @dragstart="handleDragStart($event, {{ app.job.id }})">
-                <div class="font-semibold text-gray-100 mb-1 line-clamp-2">
+                <button onclick="deleteJob({{ app.job.id }}, this)" title="Delete job"
+                        class="absolute top-1.5 right-1.5 text-gray-600 hover:text-red-400 transition-colors leading-none text-base w-5 h-5 flex items-center justify-center rounded hover:bg-red-900 hover:bg-opacity-30">&times;</button>
+                <div class="font-semibold text-gray-100 mb-1 line-clamp-2 pr-4">
                     {{ app.job.title }}
                 </div>
                 <div class="text-gray-400 mb-1">{{ app.job.company }}</div>
@@ -152,11 +159,13 @@
              @drop="$el.classList.remove('ring-2', 'ring-red-500')">
             
             {% for app in rejected %}
-            <div class="card cursor-move hover:shadow-lg transition p-3 text-xs" 
+            <div class="card cursor-move hover:shadow-lg transition p-3 text-xs relative"
                  draggable="true"
                  data-job-id="{{ app.job.id }}"
                  @dragstart="handleDragStart($event, {{ app.job.id }})">
-                <div class="font-semibold text-gray-100 mb-1 line-clamp-2">
+                <button onclick="deleteJob({{ app.job.id }}, this)" title="Delete job"
+                        class="absolute top-1.5 right-1.5 text-gray-600 hover:text-red-400 transition-colors leading-none text-base w-5 h-5 flex items-center justify-center rounded hover:bg-red-900 hover:bg-opacity-30">&times;</button>
+                <div class="font-semibold text-gray-100 mb-1 line-clamp-2 pr-4">
                     {{ app.job.title }}
                 </div>
                 <div class="text-gray-400 mb-1">{{ app.job.company }}</div>
@@ -191,11 +200,13 @@
              @drop="$el.classList.remove('ring-2', 'ring-orange-500')">
             
             {% for app in not_interested %}
-            <div class="card cursor-move hover:shadow-lg transition p-3 text-xs opacity-75" 
+            <div class="card cursor-move hover:shadow-lg transition p-3 text-xs opacity-75 relative"
                  draggable="true"
                  data-job-id="{{ app.job.id }}"
                  @dragstart="handleDragStart($event, {{ app.job.id }})">
-                <div class="font-semibold text-gray-100 mb-1 line-clamp-2">
+                <button onclick="deleteJob({{ app.job.id }}, this)" title="Delete job"
+                        class="absolute top-1.5 right-1.5 text-gray-600 hover:text-red-400 transition-colors leading-none text-base w-5 h-5 flex items-center justify-center rounded hover:bg-red-900 hover:bg-opacity-30">&times;</button>
+                <div class="font-semibold text-gray-100 mb-1 line-clamp-2 pr-4">
                     {{ app.job.title }}
                 </div>
                 <div class="text-gray-400 mb-1">{{ app.job.company }}</div>
@@ -230,11 +241,13 @@
              @drop="$el.classList.remove('ring-2', 'ring-gray-500')">
             
             {% for app in inactive %}
-            <div class="card cursor-move hover:shadow-lg transition p-3 text-xs opacity-75" 
+            <div class="card cursor-move hover:shadow-lg transition p-3 text-xs opacity-75 relative"
                  draggable="true"
                  data-job-id="{{ app.job.id }}"
                  @dragstart="handleDragStart($event, {{ app.job.id }})">
-                <div class="font-semibold text-gray-300 mb-1 line-clamp-2">
+                <button onclick="deleteJob({{ app.job.id }}, this)" title="Delete job"
+                        class="absolute top-1.5 right-1.5 text-gray-600 hover:text-red-400 transition-colors leading-none text-base w-5 h-5 flex items-center justify-center rounded hover:bg-red-900 hover:bg-opacity-30">&times;</button>
+                <div class="font-semibold text-gray-300 mb-1 line-clamp-2 pr-4">
                     {{ app.job.title }}
                 </div>
                 <div class="text-gray-500 mb-1">{{ app.job.company }}</div>
@@ -309,6 +322,24 @@ function scrapeJobs() {
         alert('❌ Error scraping jobs. Check console for details.');
         console.error(error);
     });
+}
+
+function deleteJob(jobId, btn) {
+    if (!confirm('Permanently delete this job? This cannot be undone.')) return;
+    const card = btn.closest('.card');
+    fetch(`/api/job/${jobId}/delete`, { method: 'DELETE' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                card.style.transition = 'opacity 0.3s';
+                card.style.opacity = '0';
+                setTimeout(() => card.remove(), 300);
+                toast.success('Job deleted');
+            } else {
+                toast.error('Failed to delete job');
+            }
+        })
+        .catch(() => toast.error('Failed to delete job'));
 }
 
 function kanbanBoard() {

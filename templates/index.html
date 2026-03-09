@@ -71,7 +71,15 @@
                 Setup Required
             </a>
             {% endif %}
-            <button @click="showFilters = !showFilters" 
+            <button onclick="clearAllJobs()"
+                    class="px-5 py-2.5 bg-gray-700 hover:bg-red-700 text-gray-400 hover:text-white rounded-lg font-semibold
+                           shadow-md hover:shadow-lg transition-all duration-200 flex items-center gap-2 border border-gray-600 hover:border-red-600">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+                Clear All
+            </button>
+            <button @click="showFilters = !showFilters"
                     class="px-5 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-100 rounded-lg font-semibold 
                            shadow-md hover:shadow-lg transition-all duration-200 flex items-center gap-2 border border-gray-600">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -132,10 +140,15 @@
             </div>
         </div>
         
-        <div class="flex justify-end gap-3">
-            <a href="{{ url_for('index') }}" 
-               class="px-6 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-100 rounded-lg font-semibold 
-                      shadow-md hover:shadow-lg transition-all duration-200 border border-gray-600 
+        <div class="flex justify-end gap-3 items-center">
+            <label class="flex items-center gap-2 cursor-pointer text-sm text-gray-300 select-none">
+                <input type="checkbox" name="starred" value="1" {% if starred_only %}checked{% endif %}
+                       class="w-4 h-4 accent-yellow-400">
+                <span class="text-yellow-400">★</span> Starred only
+            </label>
+            <a href="{{ url_for('index') }}"
+               class="px-6 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-100 rounded-lg font-semibold
+                      shadow-md hover:shadow-lg transition-all duration-200 border border-gray-600
                       flex items-center gap-2">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -211,6 +224,11 @@
                 
                 <!-- Actions -->
                 <div class="ml-6 flex flex-col gap-2.5">
+                    <button onclick="toggleStar({{ job.id }}, this)"
+                            title="{{ 'Unstar' if job.starred else 'Star — pin to top as reminder' }}"
+                            class="self-end text-2xl leading-none transition-all duration-150 {% if job.starred %}text-yellow-400 hover:text-yellow-300{% else %}text-gray-600 hover:text-yellow-400{% endif %}">
+                        {{ '★' if job.starred else '☆' }}
+                    </button>
                     <a href="{{ url_for('job_detail', job_id=job.id) }}" 
                        class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold 
                               text-sm shadow-md hover:shadow-lg transition-all duration-200 text-center 
@@ -231,13 +249,22 @@
                         Cover Letter
                     </button>
                     <button onclick="markAsApplied({{ job.id }})"
-                            class="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold 
-                                   text-sm shadow-md hover:shadow-lg transition-all duration-200 
+                            class="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold
+                                   text-sm shadow-md hover:shadow-lg transition-all duration-200
                                    flex items-center justify-center gap-2 whitespace-nowrap border border-green-500">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                         </svg>
                         Mark Applied
+                    </button>
+                    <button onclick="deleteJob({{ job.id }}, this)"
+                            class="px-5 py-2.5 bg-gray-700 hover:bg-red-700 text-gray-400 hover:text-white rounded-lg font-semibold
+                                   text-sm shadow-md hover:shadow-lg transition-all duration-200
+                                   flex items-center justify-center gap-2 whitespace-nowrap border border-gray-600 hover:border-red-600">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                        </svg>
+                        Delete
                     </button>
                 </div>
             </div>
@@ -322,80 +349,33 @@
 <script>
 function scrapeIndeed() {
     const btn = document.getElementById('indeedBtn');
-    const originalText = btn.innerHTML;
+    const originalHTML = btn.innerHTML;
     btn.disabled = true;
-    btn.classList.add('btn-loading');
-    btn.innerHTML = '⏳ Scraping Indeed...';
-    
-    loading.show('Scraping Indeed...');
-    
-    fetch('/api/scrape/indeed', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        loading.hide();
-        btn.disabled = false;
-        btn.classList.remove('btn-loading');
-        btn.innerHTML = originalText;
-        
-        if (data.success) {
-            toast.success(data.message);
-            setTimeout(() => location.reload(), 1500);
-        } else {
-            toast.error(data.message);
-        }
-    })
-    .catch(error => {
-        loading.hide();
-        btn.disabled = false;
-        btn.classList.remove('btn-loading');
-        btn.innerHTML = originalText;
-        toast.error('Error scraping Indeed. Check console for details.');
-        console.error(error);
-    });
+    loading.show('Scraping Indeed... This may take a few minutes — go drink some water.');
+    fetch('/api/scrape/indeed', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+        .then(r => r.json())
+        .then(data => {
+            loading.hide();
+            btn.disabled = false;
+            if (data.success) { toast.success(data.message); setTimeout(() => location.reload(), 1500); }
+            else { toast.error(data.message); }
+        })
+        .catch(() => { loading.hide(); btn.disabled = false; toast.error('Error scraping Indeed'); });
 }
 
 function scrapeAdzuna() {
     const btn = document.getElementById('adzunaBtn');
-    const originalText = btn.innerHTML;
     btn.disabled = true;
-    btn.classList.add('btn-loading');
-    btn.innerHTML = '⏳ Scraping Adzuna...';
-    
-    loading.show('Scraping Adzuna API...');
-    
-    fetch('/api/scrape/adzuna', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        loading.hide();
-        btn.disabled = false;
-        btn.classList.remove('btn-loading');
-        btn.innerHTML = originalText;
-        
-        if (data.success) {
-            toast.success(data.message);
-            setTimeout(() => location.reload(), 1500);
-        } else {
-            toast.error(data.message);
-        }
-    })
-    .catch(error => {
-        loading.hide();
-        btn.disabled = false;
-        btn.classList.remove('btn-loading');
-        btn.innerHTML = originalText;
-        toast.error('Error scraping Adzuna. Check console for details.');
-        console.error(error);
-    });
+    loading.show('Scraping Adzuna... This may take a few minutes — go drink some water.');
+    fetch('/api/scrape/adzuna', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+        .then(r => r.json())
+        .then(data => {
+            loading.hide();
+            btn.disabled = false;
+            if (data.success) { toast.success(data.message); setTimeout(() => location.reload(), 1500); }
+            else { toast.error(data.message); }
+        })
+        .catch(() => { loading.hide(); btn.disabled = false; toast.error('Error scraping Adzuna'); });
 }
 
 function markAsApplied(jobId) {
@@ -430,6 +410,62 @@ function markAsApplied(jobId) {
     });
 }
 
+function toggleStar(jobId, btn) {
+    fetch(`/api/job/${jobId}/star`, { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                btn.textContent = data.starred ? '★' : '☆';
+                btn.className = btn.className
+                    .replace(/text-(yellow-400|gray-600) hover:text-(yellow-300|yellow-400)/g, '')
+                    .trim();
+                if (data.starred) {
+                    btn.classList.add('text-yellow-400', 'hover:text-yellow-300');
+                    btn.title = 'Unstar';
+                    toast.success('Starred — pinned to top');
+                } else {
+                    btn.classList.add('text-gray-600', 'hover:text-yellow-400');
+                    btn.title = 'Star — pin to top as reminder';
+                    toast.info('Unstarred');
+                }
+            }
+        })
+        .catch(() => toast.error('Failed to update star'));
+}
+
+function clearAllJobs() {
+    if (!confirm('Delete ALL jobs? This cannot be undone.')) return;
+    fetch('/api/jobs/clear-all', { method: 'DELETE' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                toast.success(data.message);
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                toast.error('Failed to clear jobs');
+            }
+        })
+        .catch(() => toast.error('Failed to clear jobs'));
+}
+
+function deleteJob(jobId, btn) {
+    if (!confirm('Permanently delete this job? This cannot be undone.')) return;
+    const card = btn.closest('.card');
+    fetch(`/api/job/${jobId}/delete`, { method: 'DELETE' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                card.style.transition = 'opacity 0.3s';
+                card.style.opacity = '0';
+                setTimeout(() => card.remove(), 300);
+                toast.success('Job deleted');
+            } else {
+                toast.error('Failed to delete job');
+            }
+        })
+        .catch(() => toast.error('Failed to delete job'));
+}
+
 function generateCoverLetter(jobId) {
     if (!confirm('Generate AI cover letter for this job?')) return;
     
@@ -457,13 +493,13 @@ function generateCoverLetter(jobId) {
             // Show cover letter in modal
             const modal = document.createElement('div');
             modal.innerHTML = `
-                <div style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:999;display:flex;align-items:center;justify-content:center;padding:20px;" onclick="this.remove()">
-                    <div style="background:#1f2937;padding:30px;border-radius:12px;max-width:800px;max-height:90vh;overflow-y:auto;color:#fff;box-shadow:0 20px 50px rgba(0,0,0,0.7);" onclick="event.stopPropagation()">
-                        <h2 style="font-size:24px;font-weight:bold;margin-bottom:20px;color:#60a5fa;">Cover Letter</h2>
-                        <div style="white-space:pre-wrap;line-height:1.8;color:#d1d5db;margin-bottom:20px;">${data.cover_letter.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+                <div style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(26,24,20,0.55);z-index:999;display:flex;align-items:center;justify-content:center;padding:20px;" onclick="this.remove()">
+                    <div style="background:#ede8df;border:1px solid #ddd8d0;padding:32px;border-radius:8px;max-width:800px;max-height:90vh;overflow-y:auto;color:#1a1814;box-shadow:0 20px 60px rgba(26,24,20,0.15);" onclick="event.stopPropagation()">
+                        <h2 style="font-family:'Syne',sans-serif;font-size:22px;font-weight:700;margin-bottom:20px;color:#1a1814;">Cover Letter</h2>
+                        <div style="white-space:pre-wrap;line-height:1.8;color:#6b6560;margin-bottom:24px;font-size:14px;">${data.cover_letter.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
                         <div style="display:flex;gap:10px;">
-                            <button onclick="navigator.clipboard.writeText(\`${data.cover_letter.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`).then(() => toast.success('Copied to clipboard!'))" style="background:#3b82f6;color:white;padding:10px 20px;border-radius:6px;border:none;cursor:pointer;font-weight:500;">Copy</button>
-                            <button onclick="this.closest('[style*=fixed]').remove()" style="background:#6b7280;color:white;padding:10px 20px;border-radius:6px;border:none;cursor:pointer;font-weight:500;">Close</button>
+                            <button onclick="navigator.clipboard.writeText(\`${data.cover_letter.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`).then(() => toast.success('Copied to clipboard!'))" style="background:#1a1814;color:#fdfcfa;padding:10px 22px;border-radius:4px;border:none;cursor:pointer;font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.07em;text-transform:uppercase;">Copy</button>
+                            <button onclick="this.closest('[style*=fixed]').remove()" style="background:transparent;color:#6b6560;padding:10px 22px;border-radius:4px;border:1.5px solid #ccc6bc;cursor:pointer;font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.07em;text-transform:uppercase;">Close</button>
                         </div>
                     </div>
                 </div>

@@ -39,8 +39,11 @@ Requirements: {job.requirements[:1000] if job.requirements else 'Not provided'}
         
         # Add user preferences context if available
         preferences_context = ""
-        if user_preferences and user_preferences.get('search_description'):
-            preferences_context = f"\nCandidate's Job Search Goals: {user_preferences['search_description']}"
+        if user_preferences:
+            if user_preferences.get('search_description'):
+                preferences_context += f"\nCandidate's Job Search Goals: {user_preferences['search_description']}"
+            if user_preferences.get('work_experience'):
+                preferences_context += f"\nAdditional Work Experience Context: {user_preferences['work_experience']}"
         
         prompt = f"""Write a professional cover letter for this job application.
 
@@ -64,7 +67,7 @@ Instructions:
 Write the cover letter body only (starting with the opening paragraph):"""
 
         message = client.messages.create(
-            model="claude-3-5-sonnet-20241022",  # Premium model for quality cover letters
+            model="claude-haiku-4-5-20251001",
             max_tokens=800,
             messages=[{
                 "role": "user",
