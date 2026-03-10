@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login — Job Search Platform</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --cream:  #f5f0e8;
+            --white:  #fdfcfa;
+            --ink:    #1a1814;
+            --ink2:   #2e2b26;
+            --muted:  #6b6560;
+            --dim:    #a09890;
+            --border: #ddd8d0;
+            --border2:#ccc6bc;
+            --accent: #c84b2f;
+        }
+        body { background: var(--white); font-family: 'DM Sans', sans-serif; color: var(--ink); }
+        h1, h2 { font-family: 'Syne', sans-serif; }
+        label { display: block; font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+        input[type="text"], input[type="password"], input[type="email"] {
+            width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 4px;
+            background: var(--white); color: var(--ink); font-size: 14px; font-family: 'DM Sans', sans-serif;
+            outline: none; transition: border-color 0.18s;
+        }
+        input:focus { border-color: var(--accent); }
+        .btn { display: block; width: 100%; padding: 11px; border-radius: 4px; border: none;
+            background: var(--ink); color: var(--white); font-family: 'DM Mono', monospace;
+            font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase; cursor: pointer; transition: background 0.18s; }
+        .btn:hover { background: var(--ink2); }
+        .alert-error { background: rgba(200,75,47,0.08); border: 1px solid rgba(200,75,47,0.25); color: var(--accent); padding: 10px 14px; border-radius: 4px; font-size: 13px; margin-bottom: 16px; }
+        .alert-info  { background: rgba(37,99,235,0.06); border: 1px solid rgba(37,99,235,0.20); color: #1d4ed8; padding: 10px 14px; border-radius: 4px; font-size: 13px; margin-bottom: 16px; }
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px 16px;">
+        <div style="width:100%;max-width:400px;">
+
+            <!-- Logo -->
+            <div style="text-align:center;margin-bottom:36px;">
+                <span style="font-family:'Syne',sans-serif;font-size:28px;font-weight:800;letter-spacing:-0.01em;color:var(--ink);">DW<span style="color:var(--accent);">.</span></span>
+                <p style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-top:6px;">Job Search Platform</p>
+            </div>
+
+            <!-- Card -->
+            <div style="background:var(--cream);border:1px solid var(--border);border-radius:8px;padding:32px;">
+                <h2 style="font-size:20px;font-weight:700;margin-bottom:24px;">Sign in</h2>
+
+                <!-- Flash messages -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% for category, message in messages %}
+                        <div class="alert-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endwith %}
+
+                <form method="POST" action="{{ url_for('login') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                    <div style="margin-bottom:16px;">
+                        <label for="username">Username</label>
+                        <input type="text" id="username" name="username" autocomplete="username" required>
+                    </div>
+
+                    <div style="margin-bottom:8px;">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" name="password" autocomplete="current-password" required>
+                    </div>
+
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+                        <label style="display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-size:12px;cursor:pointer;">
+                            <input type="checkbox" name="remember_me" style="width:auto;"> Remember me
+                        </label>
+                        <a href="{{ url_for('forgot_password') }}" style="font-size:12px;">Forgot password?</a>
+                    </div>
+
+                    <button type="submit" class="btn">Sign in</button>
+                </form>
+            </div>
+
+            <!-- Register link -->
+            <p style="text-align:center;margin-top:20px;font-size:13px;color:var(--muted);">
+                Don't have an account? <a href="{{ url_for('register') }}">Create one</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>

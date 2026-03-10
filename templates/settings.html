@@ -137,6 +137,7 @@
                 <button onclick="scrapeJobs()" class="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-md transition-colors" id="scrapeBtn">
                     Find Jobs Now
                 </button>
+                <p class="text-xs text-gray-500 text-center mt-2">Go to the <a href="{{ url_for('index') }}" class="underline hover:text-gray-300">Jobs tab</a> to scrape specific job boards.</p>
             </div>
             {% endif %}
         </div>
@@ -392,9 +393,7 @@ function saveWorkExperience() {
 
 // ── Scrape jobs ────────────────────────────────────────────────────────────
 function scrapeJobs() {
-    const btn = document.getElementById('scrapeBtn');
-    btn.disabled = true;
-    btn.textContent = 'Scraping...';
+    loading.show('Scraping job boards... this may take a few minutes — go drink some water.');
 
     fetch('/api/scrape/run', {
         method: 'POST',
@@ -402,14 +401,12 @@ function scrapeJobs() {
     })
     .then(r => r.json())
     .then(data => {
-        btn.disabled = false;
-        btn.textContent = 'Find Jobs Now';
+        loading.hide();
         if (data.success) toast.success(data.message);
         else toast.error(data.message);
     })
     .catch(() => {
-        btn.disabled = false;
-        btn.textContent = 'Find Jobs Now';
+        loading.hide();
         toast.error('Error scraping jobs');
     });
 }

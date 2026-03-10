@@ -14,9 +14,15 @@ class Config:
     
     # API Keys
     CLAUDE_API_KEY = os.getenv('CLAUDE_API_KEY')
-    GMAIL_CLIENT_ID = os.getenv('GMAIL_CLIENT_ID')
-    GMAIL_CLIENT_SECRET = os.getenv('GMAIL_CLIENT_SECRET')
-    GMAIL_REFRESH_TOKEN = os.getenv('GMAIL_REFRESH_TOKEN')
+
+    # Flask-Mail (for password reset emails)
+    MAIL_SERVER = os.getenv('MAIL_SERVER', 'smtp.gmail.com')
+    MAIL_PORT = int(os.getenv('MAIL_PORT', 587))
+    MAIL_USE_TLS = os.getenv('MAIL_USE_TLS', 'True') == 'True'
+    MAIL_USERNAME = os.getenv('MAIL_USERNAME')
+    MAIL_PASSWORD = os.getenv('MAIL_PASSWORD')
+    MAIL_DEFAULT_SENDER = os.getenv('MAIL_DEFAULT_SENDER')
+
     # Scraping settings
     SCRAPE_FREQUENCY_HOURS = int(os.getenv('SCRAPE_FREQUENCY_HOURS', 24))
     MAX_JOBS_PER_BOARD = int(os.getenv('MAX_JOBS_PER_BOARD', 50))

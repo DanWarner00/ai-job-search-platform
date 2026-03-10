@@ -74,10 +74,38 @@ try:
     except Exception as e:
         print(f'   ⚠️  Could not set active profile: {e}')
 
+    # Add user_id to jobs table
+    try:
+        cursor.execute("ALTER TABLE jobs ADD COLUMN user_id INTEGER REFERENCES users(id)")
+        print('   Added user_id column to jobs')
+    except sqlite3.OperationalError as e:
+        if 'duplicate column name' in str(e).lower():
+            print('   user_id column already exists in jobs')
+        else:
+            raise
+
+    # Add user_id to search_preferences table
+    try:
+        cursor.execute("ALTER TABLE search_preferences ADD COLUMN user_id INTEGER REFERENCES users(id)")
+        print('   Added user_id column to search_preferences')
+    except sqlite3.OperationalError as e:
+        if 'duplicate column name' in str(e).lower():
+            print('   user_id column already exists in search_preferences')
+        else:
+            raise
+
     conn.commit()
     conn.close()
 
-    print('✅ Migration complete!')
+    # Ensure all tables (including users) are created via SQLAlchemy
+    import sys, os
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from app import app, db
+    with app.app_context():
+        db.create_all()
+        print('   Ensured all tables exist (including users)')
+
+    print('Migration complete!')
     
 except Exception as e:
     print(f'❌ Error: {e}')

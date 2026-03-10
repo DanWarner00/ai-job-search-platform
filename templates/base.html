@@ -337,9 +337,15 @@
             </a>
         </div>
 
-        <span style="font-family:'DM Mono',monospace;font-size:10px;background:rgba(45,122,79,0.1);color:var(--green);border:1px solid rgba(45,122,79,0.22);padding:4px 12px;border-radius:20px;letter-spacing:0.08em;">
-            {{ jobs_count or 0 }} jobs
-        </span>
+        <div style="display:flex;align-items:center;gap:12px;">
+            <span style="font-family:'DM Mono',monospace;font-size:10px;background:rgba(45,122,79,0.1);color:var(--green);border:1px solid rgba(45,122,79,0.22);padding:4px 12px;border-radius:20px;letter-spacing:0.08em;">
+                {{ jobs_count or 0 }} jobs
+            </span>
+            {% if current_user.is_authenticated %}
+            <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:0.05em;">{{ current_user.username }}</span>
+            <a href="{{ url_for('logout') }}" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);text-decoration:none;letter-spacing:0.05em;padding:4px 10px;border:1px solid var(--border2);border-radius:4px;transition:all 0.18s;" onmouseover="this.style.color='var(--ink)';this.style.borderColor='var(--ink)';" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border2)';">logout</a>
+            {% endif %}
+        </div>
     </nav>
 
     <!-- Flash messages -->

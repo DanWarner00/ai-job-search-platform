@@ -2,8 +2,14 @@
 Job Search Platform - Main Application
 """
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from flask_wtf.csrf import CSRFProtect
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_mail import Mail, Message
+from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 from config import config
-from models import db, Job, Application, Interview, Resume, SearchPreferences
+from models import db, User, Job, Application, Interview, Resume, SearchPreferences
 from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 import os
@@ -14,8 +20,39 @@ app.config.from_object(config[env])
 db.init_app(app)
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
+# ── AUTH EXTENSIONS ───────────────────────────────────────────────────────────
+
+login_manager = LoginManager(app)
+login_manager.login_view = 'login'
+login_manager.login_message = 'Please log in to access this page.'
+login_manager.login_message_category = 'info'
+
+csrf = CSRFProtect(app)
+limiter = Limiter(get_remote_address, app=app, default_limits=[])
+mail = Mail(app)
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
 
 # ── HELPERS ──────────────────────────────────────────────────────────────────
+
+def _get_active_prefs(user_id=None):
+    """Return the active SearchPreferences profile for a user.
+    Uses current_user if in request context and no user_id given."""
+    if user_id is None:
+        try:
+            if current_user.is_authenticated:
+                user_id = current_user.id
+        except RuntimeError:
+            pass  # Outside request context (CLI)
+    if user_id is None:
+        return None
+    return (SearchPreferences.query.filter_by(user_id=user_id, is_active=True).first()
+            or SearchPreferences.query.filter_by(user_id=user_id).first())
+
 
 def _get_profile_resume(prefs=None):
     """Return the Resume record for the given profile (or active profile)."""
@@ -25,8 +62,7 @@ def _get_profile_resume(prefs=None):
         resume = Resume.query.filter_by(profile_id=prefs.id).first()
         if resume:
             return resume
-    # Fallback: any resume (e.g. legacy data with no profile_id)
-    return Resume.query.first()
+    return None
 
 
 def _get_resume_text():
@@ -40,7 +76,7 @@ def _get_resume_text():
     return parse_resume(resume.filepath)
 
 
-def _save_jobs(jobs_data, resume_text, prefs=None):
+def _save_jobs(jobs_data, resume_text, prefs=None, user_id=None):
     """
     Persist a list of scraped job dicts, skipping duplicates and calculating
     AI match scores when a resume is available.
@@ -58,6 +94,7 @@ def _save_jobs(jobs_data, resume_text, prefs=None):
                 continue
 
             job = Job(
+                user_id=user_id,
                 source=job_data['source'],
                 external_id=job_data['external_id'],
                 url=job_data['url'],
@@ -91,12 +128,6 @@ def _save_jobs(jobs_data, resume_text, prefs=None):
     return saved, dupes
 
 
-def _get_active_prefs():
-    """Return the active SearchPreferences profile, falling back to first."""
-    return (SearchPreferences.query.filter_by(is_active=True).first()
-            or SearchPreferences.query.first())
-
-
 def _scrape_and_save(scraper_classes, source_label):
     """
     Orchestrate a web-triggered scrape: validate prefs, run scrapers, persist
@@ -109,15 +140,15 @@ def _scrape_and_save(scraper_classes, source_label):
     resume_text = _get_resume_text()
     job_titles  = [t.strip() for t in prefs.job_titles.split(',') if t.strip()]
     locations   = prefs.get_locations_list() or ['Portland, OR']
+    user_id     = current_user.id
 
     total_saved = total_dupes = 0
     for ScraperClass in scraper_classes:
         for title in job_titles[:2]:
             for location in locations:
-                search_keywords = f"{title} {prefs.keywords.strip()}" if prefs.keywords and prefs.keywords.strip() else title
-                jobs = ScraperClass().scrape(keywords=search_keywords, location=location, max_results=25)
+                jobs = ScraperClass().scrape(keywords=title, location=location, max_results=25)
                 if jobs:
-                    s, d = _save_jobs(jobs, resume_text, prefs)
+                    s, d = _save_jobs(jobs, resume_text, prefs, user_id=user_id)
                     total_saved += s
                     total_dupes += d
 
@@ -133,6 +164,8 @@ def _scrape_and_save(scraper_classes, source_label):
 
 @app.context_processor
 def inject_global_context():
+    if not current_user.is_authenticated:
+        return {}
     prefs  = _get_active_prefs()
     resume = _get_profile_resume(prefs)
     return {
@@ -140,13 +173,136 @@ def inject_global_context():
         'has_preferences': prefs is not None and bool(prefs.job_titles),
         'resume':          resume,
         'preferences':     prefs,
-        'jobs_count':      Job.query.count(),
+        'jobs_count':      Job.query.filter_by(user_id=current_user.id).count(),
     }
+
+
+# ── AUTH ROUTES ───────────────────────────────────────────────────────────────
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        email    = request.form.get('email', '').strip().lower()
+        password = request.form.get('password', '')
+        confirm  = request.form.get('confirm_password', '')
+
+        if not username or not email or not password:
+            flash('All fields are required.', 'error')
+            return render_template('register.html')
+        if len(password) < 8:
+            flash('Password must be at least 8 characters.', 'error')
+            return render_template('register.html')
+        if password != confirm:
+            flash('Passwords do not match.', 'error')
+            return render_template('register.html')
+        if User.query.filter_by(username=username).first():
+            flash('Username already taken.', 'error')
+            return render_template('register.html')
+        if User.query.filter_by(email=email).first():
+            flash('Email already registered.', 'error')
+            return render_template('register.html')
+
+        user = User(username=username, email=email)
+        user.set_password(password)
+        db.session.add(user)
+        db.session.commit()
+
+        login_user(user)
+        flash(f'Welcome, {username}! Set up your search profile to get started.', 'success')
+        return redirect(url_for('settings'))
+
+    return render_template('register.html')
+
+
+@app.route('/login', methods=['GET', 'POST'])
+@limiter.limit("20 per minute")
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        user = User.query.filter_by(username=username).first()
+        if user and user.check_password(password):
+            login_user(user, remember=request.form.get('remember_me') == 'on')
+            next_page = request.args.get('next')
+            return redirect(next_page or url_for('index'))
+        flash('Invalid username or password.', 'error')
+    return render_template('login.html')
+
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
+
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip().lower()
+        user  = User.query.filter_by(email=email).first()
+        # Always show the same message to prevent email enumeration
+        if user:
+            s     = URLSafeTimedSerializer(app.config['SECRET_KEY'])
+            token = s.dumps(user.email, salt='password-reset')
+            reset_url = url_for('reset_password', token=token, _external=True)
+            msg = Message('Reset your password', recipients=[user.email])
+            msg.body = (
+                f'Hi {user.username},\n\n'
+                f'Click the link below to reset your password. This link expires in 1 hour.\n\n'
+                f'{reset_url}\n\n'
+                f'If you did not request a password reset, ignore this email.'
+            )
+            try:
+                mail.send(msg)
+            except Exception as e:
+                print(f'Mail error: {e}')
+        flash('If that email is registered, a reset link has been sent.', 'info')
+        return redirect(url_for('login'))
+    return render_template('forgot_password.html')
+
+
+@app.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    s = URLSafeTimedSerializer(app.config['SECRET_KEY'])
+    try:
+        email = s.loads(token, salt='password-reset', max_age=3600)
+    except (SignatureExpired, BadSignature):
+        flash('The reset link is invalid or has expired.', 'error')
+        return redirect(url_for('forgot_password'))
+
+    user = User.query.filter_by(email=email).first_or_404()
+
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        confirm  = request.form.get('confirm_password', '')
+        if len(password) < 8:
+            flash('Password must be at least 8 characters.', 'error')
+            return render_template('reset_password.html', token=token)
+        if password != confirm:
+            flash('Passwords do not match.', 'error')
+            return render_template('reset_password.html', token=token)
+        user.set_password(password)
+        db.session.commit()
+        flash('Password reset! You can now log in.', 'success')
+        return redirect(url_for('login'))
+
+    return render_template('reset_password.html', token=token)
 
 
 # ── PAGE ROUTES ──────────────────────────────────────────────────────────────
 
 @app.route('/')
+@login_required
 def index():
     min_score    = request.args.get('min_score', 0,     type=int)
     max_score    = request.args.get('max_score', 100,   type=int)
@@ -156,7 +312,11 @@ def index():
     page         = request.args.get('page',     1,      type=int)
     sort_by      = request.args.get('sort_by',  'match')
 
-    query = Job.query.filter(Job.match_score >= min_score, Job.match_score <= max_score)
+    query = Job.query.filter(
+        Job.user_id == current_user.id,
+        Job.match_score >= min_score,
+        Job.match_score <= max_score,
+    )
     if location:
         query = query.filter(Job.location.like(f'%{location}%'))
     if source:
@@ -174,13 +334,24 @@ def index():
     jobs = query.paginate(page=page, per_page=app.config['JOBS_PER_PAGE'], error_out=False)
 
     stats = {
-        'total_jobs': Job.query.count(),
-        'applied':    Application.query.filter_by(status='applied').count(),
-        'interviews': Application.query.filter_by(status='interview').count(),
-        'high_match': Job.query.filter(Job.match_score >= 80).count(),
+        'total_jobs': Job.query.filter_by(user_id=current_user.id).count(),
+        'applied':    Application.query.join(Job).filter(
+                          Job.user_id == current_user.id,
+                          Application.status == 'applied',
+                      ).count(),
+        'interviews': Application.query.join(Job).filter(
+                          Job.user_id == current_user.id,
+                          Application.status == 'interview',
+                      ).count(),
+        'high_match': Job.query.filter(
+                          Job.user_id == current_user.id,
+                          Job.match_score >= 80,
+                      ).count(),
     }
 
-    source_counts = db.session.query(Job.source, db.func.count(Job.id)).group_by(Job.source).all()
+    source_counts = (db.session.query(Job.source, db.func.count(Job.id))
+                     .filter(Job.user_id == current_user.id)
+                     .group_by(Job.source).all())
     source_stats  = {src: cnt for src, cnt in source_counts}
 
     return render_template('index.html', jobs=jobs, stats=stats,
@@ -190,31 +361,51 @@ def index():
 
 
 @app.route('/job/<int:job_id>')
+@login_required
 def job_detail(job_id):
-    job         = Job.query.get_or_404(job_id)
+    job         = Job.query.filter_by(id=job_id, user_id=current_user.id).first_or_404()
     application = Application.query.filter_by(job_id=job_id).first()
     return render_template('job_detail.html', job=job, application=application)
 
 
 @app.route('/applications')
+@login_required
 def applications():
     three_weeks_ago = datetime.utcnow() - timedelta(weeks=3)
 
-    not_applied = Job.query.outerjoin(Application).filter(
-        (Application.id == None) | (Application.status == 'not_applied')
-    ).order_by(Job.match_score.desc()).limit(50).all()
+    not_applied = (Job.query
+                   .filter_by(user_id=current_user.id)
+                   .outerjoin(Application)
+                   .filter((Application.id == None) | (Application.status == 'not_applied'))
+                   .order_by(Job.match_score.desc())
+                   .limit(200).all())
 
-    applied = Application.query.filter_by(status='applied').filter(
-        Application.applied_date > three_weeks_ago
-    ).order_by(Application.applied_date.desc()).all()
+    applied = (Application.query.join(Job)
+               .filter(Job.user_id == current_user.id,
+                       Application.status == 'applied',
+                       Application.applied_date > three_weeks_ago)
+               .order_by(Application.applied_date.desc()).all())
 
-    inactive = Application.query.filter_by(status='applied').filter(
-        Application.applied_date <= three_weeks_ago
-    ).order_by(Application.applied_date.desc()).all()
+    inactive = (Application.query.join(Job)
+                .filter(Job.user_id == current_user.id,
+                        Application.status == 'applied',
+                        Application.applied_date <= three_weeks_ago)
+                .order_by(Application.applied_date.desc()).all())
 
-    interviews     = Application.query.filter_by(status='interview').order_by(Application.applied_date.desc()).all()
-    rejected       = Application.query.filter_by(status='rejected').order_by(Application.updated_at.desc()).all()
-    not_interested = Application.query.filter_by(status='not_interested').order_by(Application.updated_at.desc()).all()
+    interviews = (Application.query.join(Job)
+                  .filter(Job.user_id == current_user.id,
+                          Application.status == 'interview')
+                  .order_by(Application.applied_date.desc()).all())
+
+    rejected = (Application.query.join(Job)
+                .filter(Job.user_id == current_user.id,
+                        Application.status == 'rejected')
+                .order_by(Application.updated_at.desc()).all())
+
+    not_interested = (Application.query.join(Job)
+                      .filter(Job.user_id == current_user.id,
+                              Application.status == 'not_interested')
+                      .order_by(Application.updated_at.desc()).all())
 
     return render_template('applications.html',
                            not_applied=not_applied, applied=applied,
@@ -223,6 +414,7 @@ def applications():
 
 
 @app.route('/calendar')
+@login_required
 def calendar():
     from calendar import monthcalendar, month_name, setfirstweekday
     setfirstweekday(6)  # 6 = Sunday, matching the Sun-Sat header order in the template
@@ -235,10 +427,13 @@ def calendar():
     start_date = date(year, month, 1)
     end_date   = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
 
-    interviews = Interview.query.filter(
-        Interview.scheduled_date >= start_date,
-        Interview.scheduled_date <  end_date,
-    ).all()
+    interviews = (Interview.query
+                  .join(Application)
+                  .join(Job, Application.job_id == Job.id)
+                  .filter(Job.user_id == current_user.id,
+                          Interview.scheduled_date >= start_date,
+                          Interview.scheduled_date < end_date)
+                  .all())
 
     interviews_by_date = {}
     for iv in interviews:
@@ -251,9 +446,13 @@ def calendar():
     next_month = 1      if month == 12 else month + 1
     next_year  = year+1 if month == 12 else year
 
-    upcoming_interviews = Interview.query.join(Application).filter(
-        Interview.scheduled_date >= now
-    ).order_by(Interview.scheduled_date).limit(10).all()
+    upcoming_interviews = (Interview.query
+                           .join(Application)
+                           .join(Job, Application.job_id == Job.id)
+                           .filter(Job.user_id == current_user.id,
+                                   Interview.scheduled_date >= now)
+                           .order_by(Interview.scheduled_date)
+                           .limit(10).all())
 
     return render_template('calendar.html',
                            calendar=monthcalendar(year, month),
@@ -266,21 +465,30 @@ def calendar():
 
 
 @app.route('/analytics')
+@login_required
 def analytics():
     stats = {
-        'viewed':     Job.query.count(),
-        'applied':    Application.query.filter(
+        'viewed':     Job.query.filter_by(user_id=current_user.id).count(),
+        'applied':    Application.query.join(Job).filter(
+                          Job.user_id == current_user.id,
                           Application.status.in_(['applied', 'interview', 'rejected', 'offer'])
                       ).count(),
-        'interviews': Application.query.filter_by(status='interview').count(),
-        'offers':     Application.query.filter_by(status='offer').count(),
+        'interviews': Application.query.join(Job).filter(
+                          Job.user_id == current_user.id,
+                          Application.status == 'interview',
+                      ).count(),
+        'offers':     Application.query.join(Job).filter(
+                          Job.user_id == current_user.id,
+                          Application.status == 'offer',
+                      ).count(),
     }
     return render_template('analytics.html', stats=stats)
 
 
 @app.route('/settings')
+@login_required
 def settings():
-    all_profiles = SearchPreferences.query.order_by(SearchPreferences.id).all()
+    all_profiles = SearchPreferences.query.filter_by(user_id=current_user.id).order_by(SearchPreferences.id).all()
     active_prefs = _get_active_prefs()
     resume       = _get_profile_resume(active_prefs)
     return render_template('settings.html',
@@ -292,6 +500,8 @@ def settings():
 # ── API ROUTES ───────────────────────────────────────────────────────────────
 
 @app.route('/upload-resume', methods=['POST'])
+@login_required
+@csrf.exempt
 def upload_resume():
     if 'resume' not in request.files or request.files['resume'].filename == '':
         flash('No file selected', 'error')
@@ -328,11 +538,18 @@ def upload_resume():
 
 
 @app.route('/api/preferences/update', methods=['POST'])
+@login_required
+@csrf.exempt
 def update_preferences():
     data     = request.get_json()
     prefs_id = data.get('id')
-    prefs    = (SearchPreferences.query.get(prefs_id) if prefs_id
-                else _get_active_prefs() or SearchPreferences())
+    if prefs_id:
+        prefs = SearchPreferences.query.filter_by(id=prefs_id, user_id=current_user.id).first()
+        if not prefs:
+            return jsonify({'success': False, 'message': 'Profile not found'}), 404
+    else:
+        prefs = _get_active_prefs() or SearchPreferences(user_id=current_user.id)
+
     prefs.name               = data.get('name', prefs.name or 'Default')
     prefs.job_titles         = data.get('job_titles', '')
     prefs.keywords           = data.get('keywords', '')
@@ -348,9 +565,12 @@ def update_preferences():
 
 
 @app.route('/api/preferences/create', methods=['POST'])
+@login_required
+@csrf.exempt
 def create_preferences():
     data  = request.get_json()
     prefs = SearchPreferences(
+        user_id=current_user.id,
         name=data.get('name', 'New Profile'),
         is_active=False,
         job_titles='',
@@ -362,48 +582,58 @@ def create_preferences():
 
 
 @app.route('/api/preferences/activate/<int:prefs_id>', methods=['POST'])
+@login_required
+@csrf.exempt
 def activate_preferences(prefs_id):
-    target = SearchPreferences.query.get_or_404(prefs_id)
-    SearchPreferences.query.update({'is_active': False})
+    target = SearchPreferences.query.filter_by(id=prefs_id, user_id=current_user.id).first_or_404()
+    SearchPreferences.query.filter_by(user_id=current_user.id).update({'is_active': False})
     target.is_active = True
     db.session.commit()
     return jsonify({'success': True, 'message': f'"{target.name}" is now the active profile'})
 
 
 @app.route('/api/jobs/clear-all', methods=['DELETE'])
+@login_required
+@csrf.exempt
 def clear_all_jobs():
-    count = Job.query.count()
-    Job.query.delete()
+    count = Job.query.filter_by(user_id=current_user.id).count()
+    Job.query.filter_by(user_id=current_user.id).delete()
     db.session.commit()
     return jsonify({'success': True, 'message': f'Deleted {count} jobs'})
 
 
 @app.route('/api/job/<int:job_id>/star', methods=['POST'])
+@login_required
+@csrf.exempt
 def star_job(job_id):
-    job = Job.query.get_or_404(job_id)
+    job = Job.query.filter_by(id=job_id, user_id=current_user.id).first_or_404()
     job.starred = not job.starred
     db.session.commit()
     return jsonify({'success': True, 'starred': job.starred})
 
 
 @app.route('/api/job/<int:job_id>/delete', methods=['DELETE'])
+@login_required
+@csrf.exempt
 def delete_job(job_id):
-    job = Job.query.get_or_404(job_id)
+    job = Job.query.filter_by(id=job_id, user_id=current_user.id).first_or_404()
     db.session.delete(job)
     db.session.commit()
     return jsonify({'success': True, 'message': 'Job deleted'})
 
 
 @app.route('/api/preferences/delete/<int:prefs_id>', methods=['DELETE'])
+@login_required
+@csrf.exempt
 def delete_preferences(prefs_id):
-    if SearchPreferences.query.count() <= 1:
+    if SearchPreferences.query.filter_by(user_id=current_user.id).count() <= 1:
         return jsonify({'success': False, 'message': 'Cannot delete the only profile'}), 400
-    prefs = SearchPreferences.query.get_or_404(prefs_id)
+    prefs      = SearchPreferences.query.filter_by(id=prefs_id, user_id=current_user.id).first_or_404()
     was_active = prefs.is_active
     db.session.delete(prefs)
     db.session.flush()
     if was_active:
-        fallback = SearchPreferences.query.first()
+        fallback = SearchPreferences.query.filter_by(user_id=current_user.id).first()
         if fallback:
             fallback.is_active = True
     db.session.commit()
@@ -411,10 +641,16 @@ def delete_preferences(prefs_id):
 
 
 @app.route('/api/application/update', methods=['POST'])
+@login_required
+@csrf.exempt
 def update_application():
-    data        = request.get_json()
-    application = Application.query.filter_by(job_id=data.get('job_id')).first() \
-                  or Application(job_id=data.get('job_id'))
+    data   = request.get_json()
+    job_id = data.get('job_id')
+    if not Job.query.filter_by(id=job_id, user_id=current_user.id).first():
+        return jsonify({'success': False, 'message': 'Job not found'}), 404
+
+    application = Application.query.filter_by(job_id=job_id).first() \
+                  or Application(job_id=job_id)
     application.status           = data.get('status')
     application.rejection_reason = data.get('rejection_reason', '')
     application.notes            = data.get('notes', '')
@@ -426,6 +662,8 @@ def update_application():
 
 
 @app.route('/api/scrape/indeed', methods=['POST'])
+@login_required
+@csrf.exempt
 def scrape_indeed():
     try:
         from scrapers.indeed_playwright import IndeedPlaywrightScraper
@@ -441,6 +679,8 @@ def scrape_indeed():
 
 
 @app.route('/api/scrape/adzuna', methods=['POST'])
+@login_required
+@csrf.exempt
 def scrape_adzuna():
     from scrapers.adzuna_api import AdzunaAPIScraper
     try:
@@ -453,6 +693,8 @@ def scrape_adzuna():
 
 
 @app.route('/api/scrape/run', methods=['POST'])
+@login_required
+@csrf.exempt
 def run_scraper():
     from scrapers.adzuna_api import AdzunaAPIScraper
     scraper_classes = []
@@ -472,18 +714,25 @@ def run_scraper():
 
 
 @app.route('/api/jobs/list', methods=['GET'])
+@login_required
+@csrf.exempt
 def list_jobs():
-    jobs = Job.query.order_by(Job.scraped_date.desc()).limit(100).all()
+    jobs = Job.query.filter_by(user_id=current_user.id).order_by(Job.scraped_date.desc()).limit(100).all()
     return jsonify([{'id': j.id, 'title': j.title, 'company': j.company} for j in jobs])
 
 
 @app.route('/api/interview/schedule', methods=['POST'])
+@login_required
+@csrf.exempt
 def schedule_interview():
     data           = request.get_json()
     job_id         = data.get('job_id')
     scheduled_date = data.get('scheduled_date')
     interview_type = data.get('interview_type', 'phone')
     notes          = data.get('notes', '')
+
+    if not Job.query.filter_by(id=job_id, user_id=current_user.id).first():
+        return jsonify({'success': False, 'message': 'Job not found'}), 404
 
     application = Application.query.filter_by(job_id=job_id).first()
     if not application:
@@ -512,18 +761,26 @@ def schedule_interview():
 
 
 @app.route('/api/interview/<int:interview_id>/delete', methods=['DELETE'])
+@login_required
+@csrf.exempt
 def delete_interview(interview_id):
-    interview = Interview.query.get_or_404(interview_id)
+    interview = (Interview.query
+                 .join(Application)
+                 .join(Job, Application.job_id == Job.id)
+                 .filter(Interview.id == interview_id, Job.user_id == current_user.id)
+                 .first_or_404())
     db.session.delete(interview)
     db.session.commit()
     return jsonify({'success': True, 'message': 'Interview deleted'})
 
 
 @app.route('/api/cover-letter/generate', methods=['POST'])
+@login_required
+@csrf.exempt
 def generate_cover_letter_api():
     try:
-        job    = Job.query.get_or_404(request.get_json().get('job_id'))
-        resume = Resume.query.first()
+        job    = Job.query.filter_by(id=request.get_json().get('job_id'), user_id=current_user.id).first_or_404()
+        resume = _get_profile_resume()
         if not resume or not resume.filepath:
             return jsonify({'success': False, 'message': 'Please upload your resume first'}), 400
 
@@ -556,14 +813,16 @@ def generate_cover_letter_api():
 
 
 @app.route('/api/job/<int:job_id>/match-analysis', methods=['POST'])
+@login_required
+@csrf.exempt
 def generate_match_analysis_api(job_id):
     try:
-        job = Job.query.get_or_404(job_id)
+        job = Job.query.filter_by(id=job_id, user_id=current_user.id).first_or_404()
         resume_text = _get_resume_text()
         if not resume_text:
             return jsonify({'success': False, 'message': 'Please upload your resume first'}), 400
 
-        prefs = SearchPreferences.query.first()
+        prefs = _get_active_prefs()
         from ai.job_matcher import generate_match_analysis
         analysis = generate_match_analysis(resume_text, job, prefs)
 
@@ -577,30 +836,35 @@ def generate_match_analysis_api(job_id):
 
 @app.cli.command()
 def calculate_matches():
-    """Calculate AI match scores for all unscored jobs."""
-    resume_text = _get_resume_text()
-    if not resume_text:
-        print('Error: No resume uploaded')
-        return
-
+    """Calculate AI match scores for all unscored jobs (all users)."""
     from ai.job_matcher import calculate_match_score
-    prefs = _get_active_prefs()
-    jobs = Job.query.filter((Job.match_score == None) | (Job.match_score == 75)).all()
-    print(f'Calculating match scores for {len(jobs)} jobs...')
-
-    updated = 0
-    for i, job in enumerate(jobs, 1):
-        try:
-            job.match_score, job.match_explanation = calculate_match_score(resume_text, job, prefs)
-            updated += 1
-            if i % 5 == 0:
-                print(f'  {i}/{len(jobs)}...')
-                db.session.commit()
-        except Exception as e:
-            print(f'  Error scoring job {job.id}: {e}')
-
-    db.session.commit()
-    print(f'Updated {updated} job match scores.')
+    users = User.query.all()
+    for user in users:
+        prefs = _get_active_prefs(user_id=user.id)
+        if not prefs:
+            print(f'[{user.username}] No preferences, skipping')
+            continue
+        resume = _get_profile_resume(prefs)
+        if not resume or not resume.content:
+            print(f'[{user.username}] No resume, skipping')
+            continue
+        jobs = Job.query.filter(
+            Job.user_id == user.id,
+            (Job.match_score == None) | (Job.match_score == 75),
+        ).all()
+        print(f'[{user.username}] Scoring {len(jobs)} jobs...')
+        updated = 0
+        for i, job in enumerate(jobs, 1):
+            try:
+                job.match_score, job.match_explanation = calculate_match_score(resume.content, job, prefs)
+                updated += 1
+                if i % 5 == 0:
+                    print(f'  {i}/{len(jobs)}...')
+                    db.session.commit()
+            except Exception as e:
+                print(f'  Error scoring job {job.id}: {e}')
+        db.session.commit()
+        print(f'[{user.username}] Updated {updated} scores.')
 
 
 @app.cli.command()
@@ -612,7 +876,7 @@ def init_db():
 
 @app.cli.command()
 def scrape_jobs():
-    """Run job scrapers from the command line."""
+    """Run job scrapers from the command line (all users with active prefs)."""
     from scrapers.adzuna_api import AdzunaAPIScraper
     scraper_classes = []
     try:
@@ -623,36 +887,36 @@ def scrape_jobs():
         print('Indeed scraper not available (Playwright not installed)')
     scraper_classes.append(('Adzuna', AdzunaAPIScraper))
 
-    prefs = _get_active_prefs()
-    if not prefs or not prefs.job_titles:
-        print('No search preferences set. Visit Settings to configure.')
-        return
+    users = User.query.all()
+    for user in users:
+        prefs = _get_active_prefs(user_id=user.id)
+        if not prefs or not prefs.job_titles:
+            print(f'[{user.username}] No search preferences, skipping')
+            continue
 
-    resume_text = _get_resume_text()
-    print('Resume found — will calculate AI match scores' if resume_text else 'No resume — using placeholder scores')
+        resume = _get_profile_resume(prefs)
+        resume_text = resume.content if resume else None
+        print(f'[{user.username}] Resume {"found" if resume_text else "not found"}')
 
-    job_titles = [t.strip() for t in prefs.job_titles.split(',') if t.strip()]
-    locations  = prefs.get_locations_list() or ['Portland, OR']
+        job_titles = [t.strip() for t in prefs.job_titles.split(',') if t.strip()]
+        locations  = prefs.get_locations_list() or ['Portland, OR']
 
-    total_saved = total_dupes = 0
-    for name, ScraperClass in scraper_classes:
-        print(f'\n--- {name} ---')
-        for title in job_titles:
-            for location in locations:
-                try:
-                    search_keywords = f"{title} {prefs.keywords.strip()}" if prefs.keywords and prefs.keywords.strip() else title
-                    jobs = ScraperClass().scrape(keywords=search_keywords, location=location, max_results=50)
-                    if jobs:
-                        s, d = _save_jobs(jobs, resume_text, prefs)
-                        total_saved += s
-                        total_dupes += d
-                        print(f'  {search_keywords} / {location}: {s} saved, {d} dupes')
-                except Exception as e:
-                    print(f'  Error: {e}')
+        total_saved = total_dupes = 0
+        for name, ScraperClass in scraper_classes:
+            print(f'  --- {name} ---')
+            for title in job_titles:
+                for location in locations:
+                    try:
+                        jobs = ScraperClass().scrape(keywords=title, location=location, max_results=50)
+                        if jobs:
+                            s, d = _save_jobs(jobs, resume_text, prefs, user_id=user.id)
+                            total_saved += s
+                            total_dupes += d
+                            print(f'    {title} / {location}: {s} saved, {d} dupes')
+                    except Exception as e:
+                        print(f'    Error: {e}')
 
-    print(f'\nDone. {total_saved} saved, {total_dupes} duplicates skipped.')
-    if resume_text:
-        print('All jobs scored with AI.')
+        print(f'[{user.username}] Done. {total_saved} saved, {total_dupes} duplicates skipped.')
 
 
 # ── STARTUP ──────────────────────────────────────────────────────────────────

@@ -3,15 +3,39 @@ Database models for Job Search Platform
 """
 from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
+from flask_login import UserMixin
+from werkzeug.security import generate_password_hash, check_password_hash
 
 db = SQLAlchemy()
+
+
+class User(db.Model, UserMixin):
+    """User account model"""
+    __tablename__ = 'users'
+
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    email = db.Column(db.String(255), unique=True, nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    is_active = db.Column(db.Boolean, default=True)
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password, method='scrypt')
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
+    def __repr__(self):
+        return f'<User {self.username}>'
 
 
 class Job(db.Model):
     """Job posting model"""
     __tablename__ = 'jobs'
-    
+
     id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=True)
     source = db.Column(db.String(50), nullable=False)  # linkedin, indeed, ziprecruiter
     external_id = db.Column(db.String(255), nullable=False)  # job ID from source
     url = db.Column(db.Text, nullable=False)
@@ -27,13 +51,13 @@ class Job(db.Model):
     match_score = db.Column(db.Integer)  # AI match score 0-100
     match_explanation = db.Column(db.Text)  # Why it matched
     starred = db.Column(db.Boolean, default=False)  # Pinned to top as reminder
-    
-    # Unique constraint
+
+    # Unique constraint per user
     __table_args__ = (db.UniqueConstraint('source', 'external_id', name='unique_job'),)
-    
+
     # Relationship
     application = db.relationship('Application', backref='job', uselist=False, cascade='all, delete-orphan')
-    
+
     def __repr__(self):
         return f'<Job {self.title} at {self.company}>'
 
@@ -41,20 +65,20 @@ class Job(db.Model):
 class Application(db.Model):
     """Application tracking model"""
     __tablename__ = 'applications'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     job_id = db.Column(db.Integer, db.ForeignKey('jobs.id'), nullable=False)
-    status = db.Column(db.String(50), default='not_applied')  # not_applied, applied, interview, rejected, offer, not_interested (for AI learning)
+    status = db.Column(db.String(50), default='not_applied')  # not_applied, applied, interview, rejected, offer, not_interested
     applied_date = db.Column(db.DateTime)
-    rejection_reason = db.Column(db.String(255))  # not_qualified, low_pay, not_relevant, etc.
+    rejection_reason = db.Column(db.String(255))
     notes = db.Column(db.Text)
     cover_letter = db.Column(db.Text)  # Generated cover letter
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     # Relationship
     interviews = db.relationship('Interview', backref='application', cascade='all, delete-orphan')
-    
+
     def __repr__(self):
         return f'<Application {self.status} for Job {self.job_id}>'
 
@@ -62,7 +86,7 @@ class Application(db.Model):
 class Interview(db.Model):
     """Interview tracking model"""
     __tablename__ = 'interviews'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     application_id = db.Column(db.Integer, db.ForeignKey('applications.id'), nullable=False)
     scheduled_date = db.Column(db.DateTime)
@@ -71,7 +95,7 @@ class Interview(db.Model):
     notes = db.Column(db.Text)
     outcome = db.Column(db.String(50))  # passed, rejected, waiting
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
+
     def __repr__(self):
         return f'<Interview {self.interview_type} for Application {self.application_id}>'
 
@@ -100,6 +124,7 @@ class SearchPreferences(db.Model):
     __tablename__ = 'search_preferences'
 
     id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=True)
     name = db.Column(db.String(100), default='Default')  # Profile name
     is_active = db.Column(db.Boolean, default=True)  # Which profile is used for scraping
     job_titles = db.Column(db.Text)  # Comma-separated or JSON
@@ -124,5 +149,3 @@ class SearchPreferences(db.Model):
 
     def __repr__(self):
         return f'<SearchPreferences {self.name}: {self.job_titles}>'
-
-
