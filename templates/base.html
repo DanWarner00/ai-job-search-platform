@@ -315,6 +315,10 @@
         <span style="font-family:'Syne',sans-serif;font-size:17px;font-weight:800;letter-spacing:-0.01em;color:var(--ink);">DW<span style="color:var(--accent);">.</span></span>
 
         <div style="display:flex;align-items:center;gap:2px;">
+            <a href="{{ url_for('about') }}"
+               style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;padding:6px 18px;text-decoration:none;color:{% if request.endpoint == 'about' %}var(--ink){% else %}var(--muted){% endif %};border-bottom:2px solid {% if request.endpoint == 'about' %}var(--accent){% else %}transparent{% endif %};transition:all 0.18s;">
+                About
+            </a>
             <a href="{{ url_for('index') }}"
                style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;padding:6px 18px;text-decoration:none;color:{% if request.endpoint == 'index' %}var(--ink){% else %}var(--muted){% endif %};border-bottom:2px solid {% if request.endpoint == 'index' %}var(--accent){% else %}transparent{% endif %};transition:all 0.18s;">
                 Jobs

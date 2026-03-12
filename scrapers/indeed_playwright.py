@@ -15,9 +15,12 @@ class IndeedPlaywrightScraper:
         self.base_url = "https://www.indeed.com"
         self.jobs = []
     
-    def scrape(self, keywords='python developer', location='Portland, OR', max_results=50):
-        """Scrape jobs from Indeed using real browser"""
-        print(f'🔍 Scraping Indeed for: {keywords} in {location}')
+    def scrape(self, keywords='python developer', location='Portland, OR', max_results=50, verbose=False):
+        """Scrape jobs from Indeed using real browser.
+        verbose=True: navigate to each job page for full description (slower).
+        verbose=False: use search result snippet only (faster).
+        """
+        print(f'🔍 Scraping Indeed for: {keywords} in {location} (verbose={verbose})')
         
         with sync_playwright() as p:
             # Launch browser (headless=False to avoid detection)
@@ -60,8 +63,15 @@ class IndeedPlaywrightScraper:
                     try:
                         job_data = self.parse_job_card_playwright(card, page)
                         if job_data:
+                            if verbose and job_data.get('url'):
+                                try:
+                                    job_data['description'] = self.fetch_full_description(page, job_data['url'])
+                                    print(f'   ✅ Full desc: {job_data["title"][:50]}...')
+                                except Exception as e:
+                                    print(f'   ⚠️  Full desc failed for job {i}: {e}')
+                            else:
+                                print(f'   ✅ Parsed: {job_data["title"][:50]}...')
                             self.jobs.append(job_data)
-                            print(f'   ✅ Parsed: {job_data["title"][:50]}...')
                     except Exception as e:
                         print(f'   ⚠️  Error parsing job {i}: {e}')
                         continue
@@ -128,6 +138,21 @@ class IndeedPlaywrightScraper:
             'posted_date': None  # Indeed doesn't always show this on cards
         }
     
+    def fetch_full_description(self, page, job_url):
+        """Navigate to a job page and return the full description text."""
+        import time
+        page.goto(job_url, timeout=20000)
+        time.sleep(2)
+        desc_elem = page.query_selector('#jobDescriptionText')
+        if desc_elem:
+            return desc_elem.inner_text().strip()
+        # fallback selectors
+        for sel in ['.jobsearch-jobDescriptionText', '[data-testid="jobsearch-JobComponent-description"]']:
+            elem = page.query_selector(sel)
+            if elem:
+                return elem.inner_text().strip()
+        return ''
+
     def clean_salary(self, salary_text):
         """Extract min/max salary from text"""
         if not salary_text:

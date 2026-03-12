@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+
+{% block title %}About — Job Search Platform{% endblock %}
+
+{% block content %}
+<div style="max-width:860px;margin:0 auto;">
+
+    <!-- Header -->
+    <div style="margin-bottom:48px;">
+        <p style="font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent);margin-bottom:10px;">How it works</p>
+        <h1 style="font-size:clamp(28px,4vw,42px);font-weight:800;line-height:1.1;margin-bottom:16px;">Your job search,<br>in one place.</h1>
+        <p style="font-size:15px;color:var(--muted);max-width:560px;line-height:1.7;">
+            This platform scrapes live job listings, scores them against your resume with AI, and tracks everything from first application to final offer — so nothing slips through the cracks.
+        </p>
+    </div>
+
+    <!-- Recommended Flow -->
+    <div style="margin-bottom:56px;">
+        <h2 style="font-size:14px;font-family:'DM Mono',monospace;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);margin-bottom:24px;font-weight:400;">Recommended flow</h2>
+        <div style="display:flex;flex-direction:column;gap:0;">
+            {% set steps = [
+                ('1', 'Settings', 'Set up your search preferences and upload your resume. This is required before anything else — the platform uses your job titles, locations, and resume to drive scraping and AI scoring.', 'settings'),
+                ('2', 'Scrape Jobs', 'Head to the Jobs tab and hit Scrape Indeed or Scrape Adzuna. The platform searches across all your active job titles and locations automatically. Toggle "Full desc" for richer descriptions (slower).', 'index'),
+                ('3', 'Review & Sort', 'Jobs are scored 0–100% against your resume by AI. Filter by match score, source, or location. Expand descriptions inline. Star anything you want to keep an eye on — starred jobs pin to the top.', 'index'),
+                ('4', 'Apply & Track', 'Click "Mark Applied" on any card to log it. Jump to the Applications tab to update the status as things progress: Applied → Interview → Offer or Rejected.', 'applications'),
+                ('5', 'Schedule Interviews', 'From the Applications tab, log interviews with date and time. They appear on the Calendar tab so you can see what\'s coming up at a glance.', 'calendar')
+            ] %}
+            {% for num, title, desc, endpoint in steps %}
+            <div style="display:flex;gap:24px;padding:24px 0;border-bottom:1px solid var(--border);{% if loop.first %}border-top:1px solid var(--border);{% endif %}align-items:flex-start;">
+                <div style="flex-shrink:0;width:36px;height:36px;border-radius:50%;background:var(--cream3);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:12px;color:var(--muted);margin-top:2px;">{{ num }}</div>
+                <div style="flex:1;">
+                    <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
+                        <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:16px;color:var(--ink);">{{ title }}</span>
+                        <a href="{{ url_for(endpoint) }}" style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.07em;text-transform:uppercase;color:var(--accent);text-decoration:none;padding:3px 10px;border:1px solid rgba(200,75,47,0.3);border-radius:3px;transition:all 0.18s;" onmouseover="this.style.background='rgba(200,75,47,0.07)'" onmouseout="this.style.background='transparent'">Go →</a>
+                    </div>
+                    <p style="font-size:14px;color:var(--muted);line-height:1.65;margin:0;">{{ desc }}</p>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Feature deep-dives -->
+    <h2 style="font-size:14px;font-family:'DM Mono',monospace;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);margin-bottom:24px;font-weight:400;">Feature reference</h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:16px;margin-bottom:56px;">
+
+        <div class="card">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;">Settings</span>
+            </div>
+            <ul style="font-size:13px;color:var(--muted);line-height:1.8;margin:0;padding-left:18px;">
+                <li><b style="color:var(--ink2);">Search profiles</b> — create multiple named profiles (e.g. "Remote Data Roles", "Portland Only") and toggle between them</li>
+                <li><b style="color:var(--ink2);">Job titles</b> — comma-separated; each title becomes a separate search query</li>
+                <li><b style="color:var(--ink2);">Locations</b> — comma-separated; the platform loops through every title × location combination</li>
+                <li><b style="color:var(--ink2);">Keywords</b> — additional keywords sent to the AI for match scoring (not used in Adzuna queries)</li>
+                <li><b style="color:var(--ink2);">Resume upload</b> — paste or upload your resume; enables AI match scoring on every job</li>
+                <li><b style="color:var(--ink2);">Find Jobs Now</b> — trigger a scrape without leaving Settings</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;">Jobs tab</span>
+            </div>
+            <ul style="font-size:13px;color:var(--muted);line-height:1.8;margin:0;padding-left:18px;">
+                <li><b style="color:var(--ink2);">Scrape Indeed</b> — Playwright-based browser scraper; harder to block</li>
+                <li><b style="color:var(--ink2);">Scrape Adzuna</b> — API scraper; fast, reliable, full descriptions included</li>
+                <li><b style="color:var(--ink2);">Efficient / Full desc toggle</b> — "Full desc" navigates to each job page for complete descriptions (slower, Indeed only)</li>
+                <li><b style="color:var(--ink2);">Match score</b> — 0–100% AI score comparing the job description to your resume; filter by minimum score</li>
+                <li><b style="color:var(--ink2);">Show more / show less</b> — expand the description inline without leaving the page</li>
+                <li><b style="color:var(--ink2);">View on Indeed / Adzuna</b> — opens the original job listing directly in a new tab</li>
+                <li><b style="color:var(--ink2);">View Details</b> — opens the full job page within the platform, including AI match explanation</li>
+                <li><b style="color:var(--ink2);">Star</b> — pins the job to the top of the list as a reminder</li>
+                <li><b style="color:var(--ink2);">Cover letter</b> — generates a tailored AI cover letter for that specific job</li>
+                <li><b style="color:var(--ink2);">Duplicates</b> — jobs with the same external ID are skipped automatically on re-scrape</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;">Applications</span>
+            </div>
+            <ul style="font-size:13px;color:var(--muted);line-height:1.8;margin:0;padding-left:18px;">
+                <li><b style="color:var(--ink2);">Status pipeline</b> — Not Applied → Applied → Interview → Offer / Rejected</li>
+                <li><b style="color:var(--ink2);">Drag and drop</b> — move jobs between columns on the Kanban board</li>
+                <li><b style="color:var(--ink2);">Schedule interview</b> — adds a date/time that appears on the Calendar</li>
+                <li><b style="color:var(--ink2);">Notes</b> — freeform notes per application (recruiter name, salary, impressions)</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;">Calendar</span>
+            </div>
+            <ul style="font-size:13px;color:var(--muted);line-height:1.8;margin:0;padding-left:18px;">
+                <li><b style="color:var(--ink2);">Interview view</b> — monthly calendar showing all scheduled interviews</li>
+                <li><b style="color:var(--ink2);">Upcoming sidebar</b> — the next 5 interviews listed with company and role</li>
+                <li><b style="color:var(--ink2);">Click to expand</b> — click a day to see full interview details</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;">Analytics</span>
+            </div>
+            <ul style="font-size:13px;color:var(--muted);line-height:1.8;margin:0;padding-left:18px;">
+                <li><b style="color:var(--ink2);">Pipeline funnel</b> — jobs scraped → applied → interviewed → offered</li>
+                <li style="color:var(--dim);font-style:italic;">More advanced analytics coming soon</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;">AI features</span>
+            </div>
+            <ul style="font-size:13px;color:var(--muted);line-height:1.8;margin:0;padding-left:18px;">
+                <li><b style="color:var(--ink2);">Match scoring</b> — runs automatically when jobs are saved; requires resume upload</li>
+                <li><b style="color:var(--ink2);">Match explanation</b> — click "View Details" on any job to see why it scored the way it did</li>
+                <li><b style="color:var(--ink2);">Cover letter generation</b> — one click on the job card; tailored to that specific posting</li>
+                <li><b style="color:var(--ink2);">Re-score</b> — update your resume and re-trigger match analysis from the job detail page</li>
+            </ul>
+        </div>
+
+    </div>
+
+    <!-- Tips -->
+    <div style="background:rgba(200,75,47,0.05);border:1px solid rgba(200,75,47,0.18);border-radius:8px;padding:24px 28px;margin-bottom:48px;">
+        <h2 style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:12px;color:var(--ink);">A few tips</h2>
+        <ul style="font-size:13px;color:var(--muted);line-height:1.9;margin:0;padding-left:18px;">
+            <li>Keep job titles <b style="color:var(--ink2);">concise</b> (e.g. "Data Analyst", not "Senior Data Analyst with Python experience") — shorter titles return more Adzuna results.</li>
+            <li>Run Adzuna first — it's faster and already returns full descriptions. Use Indeed for volume.</li>
+            <li>The <b style="color:var(--ink2);">"Full desc" toggle</b> on the Jobs tab only affects Indeed; Adzuna always returns full descriptions via its API.</li>
+            <li>Re-scrape freely — duplicate jobs are detected and skipped automatically, so you won't get double entries.</li>
+            <li>Upload a <b style="color:var(--ink2);">detailed resume</b> for better AI scores. The more context, the more accurate the match.</li>
+            <li>Use <b style="color:var(--ink2);">multiple search profiles</b> in Settings to run different searches for different kinds of roles without losing your current setup.</li>
+        </ul>
+    </div>
+
+    <!-- Quick start CTA -->
+    {% if not current_user.is_authenticated %}
+    <div style="text-align:center;padding:40px 0 20px;">
+        <p style="font-size:14px;color:var(--muted);margin-bottom:20px;">Create an account to get started.</p>
+        <a href="{{ url_for('register') }}" class="btn-primary" style="margin-right:12px;">Create account</a>
+        <a href="{{ url_for('login') }}" class="btn-secondary">Sign in</a>
+    </div>
+    {% elif not has_preferences %}
+    <div style="text-align:center;padding:40px 0 20px;">
+        <p style="font-size:14px;color:var(--muted);margin-bottom:20px;">You don't have any search preferences set up yet. Start there.</p>
+        <a href="{{ url_for('settings') }}" class="btn-primary">Go to Settings →</a>
+    </div>
+    {% else %}
+    <div style="text-align:center;padding:40px 0 20px;">
+        <p style="font-size:14px;color:var(--muted);margin-bottom:20px;">You're set up. Go find some jobs.</p>
+        <a href="{{ url_for('index') }}" class="btn-primary">Go to Jobs →</a>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

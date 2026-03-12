@@ -36,23 +36,36 @@
         <h2 class="text-lg font-semibold text-gray-100">Job Listings</h2>
         <div class="flex items-center space-x-3">
             {% if has_preferences %}
+            <!-- Verbose toggle -->
+            <label class="flex items-center gap-2 cursor-pointer select-none" title="Full descriptions: navigates to each job page (slower). Efficient: uses search snippet (faster).">
+                <span class="text-xs text-gray-400">Efficient</span>
+                <div class="relative">
+                    <input type="checkbox" id="verboseToggle" class="sr-only">
+                    <div class="w-10 h-5 bg-gray-600 rounded-full shadow-inner transition-colors duration-200"
+                         id="verboseTrack"></div>
+                    <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200"
+                         id="verboseThumb"></div>
+                </div>
+                <span class="text-xs text-gray-400">Full&nbsp;desc</span>
+            </label>
+
             <!-- Indeed Scraper Button -->
-            <button onclick="scrapeIndeed()" 
-                    class="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 
-                           text-white rounded-lg font-semibold shadow-md hover:shadow-lg transition-all duration-200 
-                           flex items-center gap-2" 
+            <button onclick="scrapeIndeed()"
+                    class="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800
+                           text-white rounded-lg font-semibold shadow-md hover:shadow-lg transition-all duration-200
+                           flex items-center gap-2"
                     id="indeedBtn">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                 </svg>
                 Scrape Indeed
             </button>
-            
+
             <!-- Adzuna Scraper Button -->
-            <button onclick="scrapeAdzuna()" 
-                    class="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 
-                           text-white rounded-lg font-semibold shadow-md hover:shadow-lg transition-all duration-200 
-                           flex items-center gap-2" 
+            <button onclick="scrapeAdzuna()"
+                    class="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800
+                           text-white rounded-lg font-semibold shadow-md hover:shadow-lg transition-all duration-200
+                           flex items-center gap-2"
                     id="adzunaBtn">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/>
@@ -214,11 +227,18 @@
                         </svg>
                     </a>
                     
-                    <!-- Description Preview -->
+                    <!-- Description Preview (expandable) -->
                     {% if job.description %}
-                    <p class="text-gray-400 text-sm line-clamp-2 mb-3">
-                        {{ job.description[:200] }}...
-                    </p>
+                    <div class="text-gray-400 text-sm mb-3" x-data="{ open: false }">
+                        <span x-show="!open">{{ job.description[:220] }}{% if job.description|length > 220 %}…
+                            <button @click.prevent="open = true"
+                                    class="text-blue-400 hover:text-blue-300 font-medium ml-1">show more</button>
+                        {% endif %}</span>
+                        <span x-show="open" x-cloak style="white-space: pre-line;">{{ job.description }}
+                            <button @click.prevent="open = false"
+                                    class="text-blue-400 hover:text-blue-300 font-medium ml-1">show less</button>
+                        </span>
+                    </div>
                     {% endif %}
                 </div>
                 
@@ -347,12 +367,23 @@
 
 {% block extra_scripts %}
 <script>
+function isVerbose() {
+    return document.getElementById('verboseToggle')?.checked || false;
+}
+
 function scrapeIndeed() {
     const btn = document.getElementById('indeedBtn');
-    const originalHTML = btn.innerHTML;
+    const verbose = isVerbose();
     btn.disabled = true;
-    loading.show('Scraping Indeed... This may take a few minutes — go drink some water.');
-    fetch('/api/scrape/indeed', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+    const msg = verbose
+        ? 'Scraping Indeed with full descriptions — this will be slower, go grab a coffee.'
+        : 'Scraping Indeed... This may take a few minutes — go drink some water.';
+    loading.show(msg);
+    fetch('/api/scrape/indeed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ verbose })
+    })
         .then(r => r.json())
         .then(data => {
             loading.hide();
@@ -365,9 +396,14 @@ function scrapeIndeed() {
 
 function scrapeAdzuna() {
     const btn = document.getElementById('adzunaBtn');
+    const verbose = isVerbose();
     btn.disabled = true;
     loading.show('Scraping Adzuna... This may take a few minutes — go drink some water.');
-    fetch('/api/scrape/adzuna', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+    fetch('/api/scrape/adzuna', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ verbose })
+    })
         .then(r => r.json())
         .then(data => {
             loading.hide();
@@ -515,6 +551,23 @@ function generateCoverLetter(jobId) {
         console.error('Cover letter error:', error);
     });
 }
+
+// Verbose toggle animation
+(function() {
+    const toggle = document.getElementById('verboseToggle');
+    if (!toggle) return;
+    const track = document.getElementById('verboseTrack');
+    const thumb = document.getElementById('verboseThumb');
+    toggle.addEventListener('change', function() {
+        if (this.checked) {
+            track.style.backgroundColor = '#3b82f6';
+            thumb.style.transform = 'translateX(20px)';
+        } else {
+            track.style.backgroundColor = '';
+            thumb.style.transform = '';
+        }
+    });
+})();
 </script>
 {% endblock %}
 

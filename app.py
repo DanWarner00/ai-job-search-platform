@@ -128,10 +128,11 @@ def _save_jobs(jobs_data, resume_text, prefs=None, user_id=None):
     return saved, dupes
 
 
-def _scrape_and_save(scraper_classes, source_label):
+def _scrape_and_save(scraper_classes, source_label, verbose=False):
     """
     Orchestrate a web-triggered scrape: validate prefs, run scrapers, persist
     results. Returns (saved, dupes, message) — saved=None signals a 400 error.
+    verbose=True passes through to scrapers that support it (Indeed) for full descriptions.
     """
     prefs = _get_active_prefs()
     if not prefs or not prefs.job_titles:
@@ -142,11 +143,18 @@ def _scrape_and_save(scraper_classes, source_label):
     locations   = prefs.get_locations_list() or ['Portland, OR']
     user_id     = current_user.id
 
+    import inspect
     total_saved = total_dupes = 0
     for ScraperClass in scraper_classes:
         for title in job_titles[:2]:
             for location in locations:
-                jobs = ScraperClass().scrape(keywords=title, location=location, max_results=25)
+                scraper = ScraperClass()
+                # Only pass verbose if the scraper's scrape() method accepts it
+                sig = inspect.signature(scraper.scrape)
+                if 'verbose' in sig.parameters:
+                    jobs = scraper.scrape(keywords=title, location=location, max_results=25, verbose=verbose)
+                else:
+                    jobs = scraper.scrape(keywords=title, location=location, max_results=25)
                 if jobs:
                     s, d = _save_jobs(jobs, resume_text, prefs, user_id=user_id)
                     total_saved += s
@@ -300,6 +308,11 @@ def reset_password(token):
 
 
 # ── PAGE ROUTES ──────────────────────────────────────────────────────────────
+
+@app.route('/about')
+def about():
+    return render_template('about.html')
+
 
 @app.route('/')
 @login_required
@@ -669,8 +682,9 @@ def scrape_indeed():
         from scrapers.indeed_playwright import IndeedPlaywrightScraper
     except ImportError:
         return jsonify({'success': False, 'message': 'Indeed scraper not available (Playwright not installed)'}), 400
+    verbose = (request.get_json(silent=True) or {}).get('verbose', False)
     try:
-        saved, dupes, msg = _scrape_and_save([IndeedPlaywrightScraper], 'Indeed')
+        saved, dupes, msg = _scrape_and_save([IndeedPlaywrightScraper], 'Indeed', verbose=verbose)
         if saved is None:
             return jsonify({'success': False, 'message': msg}), 400
         return jsonify({'success': True, 'message': msg, 'saved': saved, 'duplicates': dupes})
@@ -683,8 +697,9 @@ def scrape_indeed():
 @csrf.exempt
 def scrape_adzuna():
     from scrapers.adzuna_api import AdzunaAPIScraper
+    verbose = (request.get_json(silent=True) or {}).get('verbose', False)
     try:
-        saved, dupes, msg = _scrape_and_save([AdzunaAPIScraper], 'Adzuna')
+        saved, dupes, msg = _scrape_and_save([AdzunaAPIScraper], 'Adzuna', verbose=verbose)
         if saved is None:
             return jsonify({'success': False, 'message': msg}), 400
         return jsonify({'success': True, 'message': msg, 'saved': saved, 'duplicates': dupes})
