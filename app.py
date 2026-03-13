@@ -68,12 +68,17 @@ def _get_profile_resume(prefs=None):
 def _get_resume_text():
     """Parse and return the active profile's resume text, or None."""
     resume = _get_profile_resume()
-    if not resume or not resume.filepath:
+    if not resume:
         return None
     if resume.content:
         return resume.content
-    from ai.resume_parser import parse_resume
-    return parse_resume(resume.filepath)
+    if resume.filepath and os.path.exists(resume.filepath):
+        try:
+            from ai.resume_parser import parse_resume
+            return parse_resume(resume.filepath)
+        except Exception:
+            pass
+    return None
 
 
 def _save_jobs(jobs_data, resume_text, prefs=None, user_id=None):
@@ -88,8 +93,7 @@ def _save_jobs(jobs_data, resume_text, prefs=None, user_id=None):
         try:
             if Job.query.filter_by(
                 source=job_data['source'],
-                external_id=job_data['external_id'],
-                user_id=user_id
+                external_id=job_data['external_id']
             ).first():
                 dupes += 1
                 continue
@@ -530,10 +534,9 @@ def upload_resume():
     original_filename = file.filename
     timestamp         = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
     stored_filename   = f'resume_{timestamp}.{ext}'
-
-    upload_folder = app.config['UPLOAD_FOLDER']
+    upload_folder     = app.config['UPLOAD_FOLDER']
     os.makedirs(upload_folder, exist_ok=True)
-    filepath = os.path.join(upload_folder, stored_filename)
+    filepath          = os.path.join(upload_folder, stored_filename)
 
     try:
         file.save(filepath)
@@ -545,8 +548,8 @@ def upload_resume():
     try:
         from ai.resume_parser import parse_resume
         parsed_text = parse_resume(filepath)
-    except Exception as e:
-        app.logger.warning(f'Resume parsing failed: {e}')
+    except Exception:
+        pass
 
     active_prefs = _get_active_prefs()
     profile_id   = active_prefs.id if active_prefs else None
@@ -560,31 +563,10 @@ def upload_resume():
     db.session.commit()
 
     if parsed_text:
-        flash('Resume uploaded and parsed successfully!', 'success')
+        flash('Resume uploaded successfully!', 'success')
     else:
-        flash('Resume uploaded, but text extraction failed — AI scoring may not work. Try a plain-text PDF or DOCX.', 'warning')
+        flash('Resume saved, but text extraction failed — cover letters may not be personalised.', 'warning')
     return redirect(url_for('settings'))
-
-
-@app.route('/api/resume/save-text', methods=['POST'])
-@login_required
-@csrf.exempt
-def save_resume_text():
-    text = (request.get_json(silent=True) or {}).get('text', '').strip()
-    if not text:
-        return jsonify({'success': False, 'message': 'No text provided'}), 400
-
-    active_prefs = _get_active_prefs()
-    profile_id   = active_prefs.id if active_prefs else None
-
-    resume = Resume.query.filter_by(profile_id=profile_id).first() or Resume(profile_id=profile_id)
-    resume.filename    = 'pasted_resume.txt'
-    resume.filepath    = None
-    resume.content     = text
-    resume.uploaded_at = datetime.utcnow()
-    db.session.add(resume)
-    db.session.commit()
-    return jsonify({'success': True})
 
 
 @app.route('/api/preferences/update', methods=['POST'])

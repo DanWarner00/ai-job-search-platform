@@ -52,8 +52,7 @@ class Job(db.Model):
     match_explanation = db.Column(db.Text)  # Why it matched
     starred = db.Column(db.Boolean, default=False)  # Pinned to top as reminder
 
-    # Unique constraint per user — each user can have the same external job, different users can share it
-    __table_args__ = (db.UniqueConstraint('source', 'external_id', 'user_id', name='unique_job_per_user'),)
+    __table_args__ = (db.UniqueConstraint('source', 'external_id', name='unique_job'),)
 
     # Relationship
     application = db.relationship('Application', backref='job', uselist=False, cascade='all, delete-orphan')

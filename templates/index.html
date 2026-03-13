@@ -3,6 +3,15 @@
 {% block title %}Job Listings - Job Search Platform{% endblock %}
 
 {% block content %}
+{% if not has_resume %}
+<div class="flex items-center gap-3 px-4 py-3 mb-6 rounded-lg bg-amber-900/40 border border-amber-600/50 text-amber-300 text-sm">
+    <svg class="w-5 h-5 flex-shrink-0 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+    </svg>
+    <span>No resume uploaded — match scores will default to 75 and cover letters won't be personalised.</span>
+    <a href="{{ url_for('settings') }}" class="ml-auto whitespace-nowrap font-semibold text-amber-200 hover:text-white underline underline-offset-2">Upload in Settings &rarr;</a>
+</div>
+{% endif %}
 <!-- Stats Header -->
 <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
     <div class="card">
