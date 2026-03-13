@@ -31,8 +31,8 @@ class Config:
     JOBS_PER_PAGE = int(os.getenv('JOBS_PER_PAGE', 20))
     MIN_MATCH_SCORE = int(os.getenv('MIN_MATCH_SCORE', 60))
     
-    # File uploads
-    UPLOAD_FOLDER = 'static/uploads'
+    # File uploads — absolute path so gunicorn/AWS doesn't resolve relative to cwd
+    UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'uploads')
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
     ALLOWED_EXTENSIONS = {'pdf', 'docx'}
 
