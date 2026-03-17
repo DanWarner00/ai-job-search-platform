@@ -2,8 +2,9 @@
 Add missing columns to existing database
 """
 import sqlite3
+import os
 
-db_path = 'jobs.db'
+db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance', 'jobs.db')
 
 print('Migrating database...')
 

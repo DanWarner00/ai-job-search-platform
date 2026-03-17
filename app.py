@@ -13,6 +13,7 @@ from models import db, User, Job, Application, Interview, Resume, SearchPreferen
 from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 import os
+import threading
 
 app = Flask(__name__)
 env = os.getenv('FLASK_ENV', 'development')
@@ -544,28 +545,33 @@ def upload_resume():
         flash(f'Failed to save file: {e}', 'error')
         return redirect(url_for('settings'))
 
-    parsed_text = None
-    try:
-        from ai.resume_parser import parse_resume
-        parsed_text = parse_resume(filepath)
-    except Exception:
-        pass
-
     active_prefs = _get_active_prefs()
     profile_id   = active_prefs.id if active_prefs else None
 
     resume = Resume.query.filter_by(profile_id=profile_id).first() or Resume(profile_id=profile_id)
     resume.filename    = original_filename
     resume.filepath    = filepath
-    resume.content     = parsed_text
+    resume.content     = None
     resume.uploaded_at = datetime.utcnow()
     db.session.add(resume)
     db.session.commit()
+    resume_id = resume.id
 
-    if parsed_text:
-        flash('Resume uploaded successfully!', 'success')
-    else:
-        flash('Resume saved, but text extraction failed — cover letters may not be personalised.', 'warning')
+    def _parse_in_background(resume_id, filepath):
+        with app.app_context():
+            try:
+                from ai.resume_parser import parse_resume
+                parsed_text = parse_resume(filepath)
+                r = Resume.query.get(resume_id)
+                if r:
+                    r.content = parsed_text
+                    db.session.commit()
+            except Exception:
+                pass
+
+    threading.Thread(target=_parse_in_background, args=(resume_id, filepath), daemon=True).start()
+
+    flash('Resume uploaded — extracting text in the background.', 'success')
     return redirect(url_for('settings'))
 
 
