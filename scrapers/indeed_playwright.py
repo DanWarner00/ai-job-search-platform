@@ -26,12 +26,19 @@ class IndeedPlaywrightScraper:
             # Launch browser in headless mode (required on servers with no display)
             browser = p.chromium.launch(
                 headless=True,
-                args=['--disable-blink-features=AutomationControlled']
+                args=[
+                    '--disable-blink-features=AutomationControlled',
+                    '--no-sandbox',
+                    '--disable-dev-shm-usage',
+                ]
             )
             context = browser.new_context(
-                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                viewport={'width': 1920, 'height': 1080},
+                locale='en-US',
             )
             page = context.new_page()
+            page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             
             # Build search URL
             search_url = f"{self.base_url}/jobs?q={keywords}&l={location}"
@@ -57,6 +64,9 @@ class IndeedPlaywrightScraper:
                     print(f'   No .cardOutline found, trying .slider_item...')
                     job_cards = page.query_selector_all('.slider_item')
                 
+                if not job_cards:
+                    print(f'   Page title: {page.title()}')
+                    print(f'   Page URL: {page.url}')
                 print(f'   Found {len(job_cards)} job cards')
                 
                 for i, card in enumerate(job_cards[:max_results]):
