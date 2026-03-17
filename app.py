@@ -546,7 +546,11 @@ def upload_resume():
         return redirect(url_for('settings'))
 
     active_prefs = _get_active_prefs()
-    profile_id   = active_prefs.id if active_prefs else None
+    if not active_prefs:
+        active_prefs = SearchPreferences(user_id=current_user.id, name='Default', is_active=True)
+        db.session.add(active_prefs)
+        db.session.flush()  # get the id without full commit
+    profile_id = active_prefs.id
 
     resume = Resume.query.filter_by(profile_id=profile_id).first() or Resume(profile_id=profile_id)
     resume.filename    = original_filename
