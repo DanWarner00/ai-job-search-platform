@@ -23,9 +23,9 @@ class IndeedPlaywrightScraper:
         print(f'🔍 Scraping Indeed for: {keywords} in {location} (verbose={verbose})')
         
         with sync_playwright() as p:
-            # Launch browser (headless=False to avoid detection)
+            # Launch browser in headless mode (required on servers with no display)
             browser = p.chromium.launch(
-                headless=False,
+                headless=True,
                 args=['--disable-blink-features=AutomationControlled']
             )
             context = browser.new_context(
